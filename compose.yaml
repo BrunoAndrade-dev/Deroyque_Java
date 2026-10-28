@@ -1,0 +1,71 @@
+name: deroyque
+
+services:
+  db:
+    image: postgres:17.6-alpine
+    environment:
+      POSTGRES_DB: deroyque
+      POSTGRES_USER: deroyque
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    secrets:
+      - db_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U deroyque -d deroyque"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+    stop_grace_period: 30s
+
+  provider-mock:
+    build:
+      context: .
+      target: provider-mock
+    image: deroyque-provider-mock:local
+    read_only: true
+    tmpfs:
+      - /tmp:size=128m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 512m
+    stop_grace_period: 15s
+
+  app:
+    build:
+      context: .
+      target: application
+    image: deroyque-app:local
+    environment:
+      DB_URL: jdbc:postgresql://db:5432/deroyque
+      DB_USERNAME: deroyque
+      SPRING_CONFIG_IMPORT: configtree:/run/secrets/
+      PROVIDER_BASE_URL: http://provider-mock:8081
+      SECURITY_ISSUER_URI: ${SECURITY_ISSUER_URI:?Configure SECURITY_ISSUER_URI}
+      SECURITY_JWK_SET_URI: ${SECURITY_JWK_SET_URI:?Configure SECURITY_JWK_SET_URI}
+      SECURITY_AUDIENCE: ${SECURITY_AUDIENCE:?Configure SECURITY_AUDIENCE}
+    secrets:
+      - source: db_password
+        target: spring.datasource.password
+    ports:
+      - "127.0.0.1:${APP_PORT:-8080}:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+      provider-mock:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp:size=128m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 768m
+    stop_grace_period: 45s
+
+secrets:
+  db_password:
+    file: ${DB_PASSWORD_FILE:?Configure DB_PASSWORD_FILE com um caminho externo ao repositorio}
+
+volumes:
+  postgres_data:

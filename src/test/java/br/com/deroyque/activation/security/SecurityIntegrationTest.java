@@ -334,6 +334,18 @@ class SecurityIntegrationTest {
         return bearer(TestTokens.token("requests:read requests:write", builder -> builder.subject(subject)));
     }
 
+    @Test
+    void shouldRejectUnknownKeyWhenJwkConnectionIsReset() throws Exception {
+        testJwkServer.stubFor(get(urlEqualTo("/jwks")).willReturn(aResponse()
+                .withFault(com.github.tomakehurst.wiremock.http.Fault.CONNECTION_RESET_BY_PEER)));
+        try {
+            String token = TestTokens.token("requests:read", b -> { }, TestTokens.newKey(), JWSAlgorithm.RS256);
+            assertProblem(call(HttpMethod.GET, "/api/v1/requests", bearer(token), null), HttpStatus.UNAUTHORIZED);
+        } finally {
+            restoreJwks();
+        }
+    }
+
     private void restoreJwks() {
         testJwkServer.stubFor(get(urlEqualTo("/jwks")).willReturn(okJson(TestTokens.jwks(TestTokens.KEY))));
     }
