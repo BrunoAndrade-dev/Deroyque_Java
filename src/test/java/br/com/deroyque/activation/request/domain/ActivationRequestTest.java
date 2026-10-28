@@ -116,4 +116,63 @@ class ActivationRequestTest {
     private ActivationRequest newRequest() {
         return ActivationRequest.create("EXT-123", "CUSTOMER-1", "INTERNET-500", NOW);
     }
+
+    @Test
+    void shouldScheduleRetryAndCreateANewAttemptTokenOnlyWhenDue() {
+        var request = newRequest();
+        request.startProcessing(NOW);
+        var oldToken = request.getProcessingToken();
+        request.retryOrFail("HTTP_500", NOW.plusSeconds(1), 3, NOW);
+
+        assertThat(request.getStatus()).isEqualTo(RequestStatus.PENDING);
+        assertThat(request.getAttemptCount()).isEqualTo(1);
+        assertThat(request.getNextAttemptAt()).isEqualTo(NOW.plusSeconds(1));
+        assertThat(request.getProcessingToken()).isNull();
+        assertThatIllegalArgumentException().isThrownBy(() -> request.startProcessing(NOW));
+
+        request.startProcessing(NOW.plusSeconds(1));
+        assertThat(request.getAttemptCount()).isEqualTo(2);
+        assertThat(request.getProcessingToken()).isNotEqualTo(oldToken);
+        assertThat(request.getProcessingStartedAt()).isEqualTo(NOW.plusSeconds(1));
+    }
+
+    @Test
+    void shouldStopAfterThreeAttempts() {
+        var request = newRequest();
+        for (int attempt = 0; attempt < 3; attempt++) {
+            var now = NOW.plusSeconds(attempt);
+            request.startProcessing(now);
+            request.retryOrFail("TIMEOUT", now.plusSeconds(1), 3, now);
+        }
+
+        assertThat(request.getStatus()).isEqualTo(RequestStatus.FAILED);
+        assertThat(request.getAttemptCount()).isEqualTo(3);
+        assertThat(request.getLastError()).isEqualTo("TIMEOUT");
+        assertThat(request.getNextAttemptAt()).isNull();
+        assertThat(request.getProcessingStartedAt()).isNull();
+    }
+
+    @Test
+    void shouldRejectUnsanitizedErrorWithoutChangingState() {
+        var request = newRequest();
+        request.startProcessing(NOW);
+
+        assertThatIllegalArgumentException().isThrownBy(() -> request.fail("raw provider body", NOW));
+        assertThat(request.getStatus()).isEqualTo(RequestStatus.PROCESSING);
+        assertThat(request.getLastError()).isNull();
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = RequestStatus.class, names = {"COMPLETED", "FAILED"})
+    void shouldNotRetryTerminalRequest(RequestStatus terminalState) {
+        var request = newRequest();
+        request.startProcessing(NOW);
+        if (terminalState == RequestStatus.COMPLETED) {
+            request.complete(NOW);
+        } else {
+            request.fail(NOW);
+        }
+        assertThatIllegalStateException().isThrownBy(() ->
+                request.retryOrFail("TIMEOUT", NOW.plusSeconds(1), 3, NOW));
+    }
 }
