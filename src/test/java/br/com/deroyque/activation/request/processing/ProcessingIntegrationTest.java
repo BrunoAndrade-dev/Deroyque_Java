@@ -248,7 +248,7 @@ class ProcessingIntegrationTest {
     }
 
     private ActivationRequest create(String product) {
-        return repository.saveAndFlush(ActivationRequest.create("EXT-" + UUID.randomUUID(), "CUSTOMER", product, NOW));
+        return repository.saveAndFlush(ActivationRequest.create("EXT-" + UUID.randomUUID(), "CUSTOMER", product, NOW, "a".repeat(64)));
     }
 
     private ActivationRequest stored(UUID id) {

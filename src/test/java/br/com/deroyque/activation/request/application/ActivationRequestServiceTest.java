@@ -4,6 +4,8 @@ import br.com.deroyque.activation.request.domain.ActivationRequest;
 import br.com.deroyque.activation.request.persistence.ActivationRequestRepository;
 import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
+import br.com.deroyque.activation.security.CurrentConsumer;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -27,14 +29,22 @@ class ActivationRequestServiceTest {
     @Mock
     private RequestCreationTransaction creationTransaction;
 
+    @Mock
+    private CurrentConsumer consumer;
+
+    @BeforeEach
+    void authenticateConsumer() {
+        when(consumer.ownerId()).thenReturn("a".repeat(64));
+    }
+
     @InjectMocks
     private ActivationRequestService service;
 
     @Test
     void shouldReadWinningInsertAfterUniqueConstraintFailure() {
-        var winner = ActivationRequest.create("EXT", "CUSTOMER", "PRODUCT", Instant.now());
+        var winner = ActivationRequest.create("EXT", "CUSTOMER", "PRODUCT", Instant.now(), "a".repeat(64));
         when(repository.findByExternalId("EXT")).thenReturn(Optional.empty(), Optional.of(winner));
-        when(creationTransaction.insert("EXT", "CUSTOMER", "PRODUCT"))
+        when(creationTransaction.insert("EXT", "CUSTOMER", "PRODUCT", "a".repeat(64)))
                 .thenThrow(violation("uk_activation_requests_external_id"));
 
         var result = service.create("EXT", "CUSTOMER", "PRODUCT");
@@ -45,9 +55,9 @@ class ActivationRequestServiceTest {
 
     @Test
     void shouldRejectDifferentContentAfterConcurrentInsertWins() {
-        var winner = ActivationRequest.create("EXT", "OTHER-CUSTOMER", "PRODUCT", Instant.now());
+        var winner = ActivationRequest.create("EXT", "OTHER-CUSTOMER", "PRODUCT", Instant.now(), "a".repeat(64));
         when(repository.findByExternalId("EXT")).thenReturn(Optional.empty(), Optional.of(winner));
-        when(creationTransaction.insert("EXT", "CUSTOMER", "PRODUCT"))
+        when(creationTransaction.insert("EXT", "CUSTOMER", "PRODUCT", "a".repeat(64)))
                 .thenThrow(violation("uk_activation_requests_external_id"));
 
         assertThatThrownBy(() -> service.create("EXT", "CUSTOMER", "PRODUCT"))
@@ -58,7 +68,7 @@ class ActivationRequestServiceTest {
     void shouldNotTreatUnrelatedIntegrityFailureAsDuplicateExternalId() {
         var failure = violation("different_constraint");
         when(repository.findByExternalId("EXT")).thenReturn(Optional.empty());
-        when(creationTransaction.insert("EXT", "CUSTOMER", "PRODUCT")).thenThrow(failure);
+        when(creationTransaction.insert("EXT", "CUSTOMER", "PRODUCT", "a".repeat(64))).thenThrow(failure);
 
         assertThatThrownBy(() -> service.create("EXT", "CUSTOMER", "PRODUCT")).isSameAs(failure);
     }

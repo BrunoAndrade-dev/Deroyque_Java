@@ -16,6 +16,8 @@ public interface ActivationRequestRepository extends JpaRepository<ActivationReq
 
     Optional<ActivationRequest> findByExternalId(String externalId);
 
+    Optional<ActivationRequest> findByIdAndOwnerId(UUID id, String ownerId);
+
     @Query(value = """
             SELECT * FROM activation_requests
             WHERE status = 'PENDING' AND next_attempt_at <= :now AND attempt_count < :maxAttempts

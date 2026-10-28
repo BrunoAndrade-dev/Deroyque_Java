@@ -282,7 +282,8 @@ class ActivationRequestApiTest {
 
     private ActivationRequest persist(String externalId, String customerId, int seconds) {
         return repository.saveAndFlush(ActivationRequest.create(externalId, customerId, "PRODUCT",
-                Instant.parse("2026-10-27T12:00:00Z").plusSeconds(seconds)));
+                Instant.parse("2026-10-27T12:00:00Z").plusSeconds(seconds),
+                br.com.deroyque.activation.support.TestTokens.ownerId()));
     }
 
     private void assertProblem(ResponseEntity<JsonNode> response, HttpStatus status) {

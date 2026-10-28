@@ -2,6 +2,9 @@ package br.com.deroyque.activation.shared.web;
 
 import br.com.deroyque.activation.request.api.ActivationRequestController;
 import br.com.deroyque.activation.request.application.ActivationRequestService;
+import br.com.deroyque.activation.security.SecurityConfiguration;
+import br.com.deroyque.activation.security.SecurityProblemHandler;
+import br.com.deroyque.activation.support.TestSecurityConfiguration;
 import org.junit.jupiter.api.Test;
 import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -9,6 +12,8 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.context.annotation.Import;
+import org.springframework.security.test.context.support.WithMockUser;
 
 import java.util.UUID;
 
@@ -24,6 +29,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(ActivationRequestController.class)
+@Import({SecurityConfiguration.class, SecurityProblemHandler.class, TestSecurityConfiguration.class})
+@WithMockUser(authorities = {"SCOPE_requests:read", "SCOPE_requests:write"})
 class ApiExceptionHandlerTest {
 
     @Autowired

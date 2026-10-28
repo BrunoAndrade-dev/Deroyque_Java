@@ -1,6 +1,7 @@
 package br.com.deroyque.activation.request.processing;
 
 import br.com.deroyque.activation.request.provider.ProviderProperties;
+import br.com.deroyque.activation.request.provider.ProviderCredentialProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -8,7 +9,7 @@ import org.springframework.context.annotation.Configuration;
 import java.net.http.HttpClient;
 
 @Configuration(proxyBeanMethods = false)
-@EnableConfigurationProperties({ProcessingProperties.class, ProviderProperties.class})
+@EnableConfigurationProperties({ProcessingProperties.class, ProviderProperties.class, ProviderCredentialProperties.class})
 public class ProcessingConfiguration {
 
     @Bean

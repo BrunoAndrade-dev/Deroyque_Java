@@ -19,7 +19,7 @@ class ActivationRequestTest {
 
     @Test
     void shouldCreatePendingRequestAndStripIdentifiersWithoutChangingCase() {
-        var request = ActivationRequest.create("  Ext-123  ", " Customer-1 ", " Internet-500 ", NOW);
+        var request = ActivationRequest.create("  Ext-123  ", " Customer-1 ", " Internet-500 ", NOW, "a".repeat(64));
 
         assertThat(request.getId()).isNotNull();
         assertThat(request.getExternalId()).isEqualTo("Ext-123");
@@ -32,8 +32,8 @@ class ActivationRequestTest {
 
     @Test
     void shouldAcceptIdentifiersAtBothLengthBoundaries() {
-        var shortest = ActivationRequest.create("a", "b", "c", NOW);
-        var longest = ActivationRequest.create("a".repeat(100), "b".repeat(100), "c".repeat(100), NOW);
+        var shortest = ActivationRequest.create("a", "b", "c", NOW, "a".repeat(64));
+        var longest = ActivationRequest.create("a".repeat(100), "b".repeat(100), "c".repeat(100), NOW, "a".repeat(64));
 
         assertThat(shortest.getExternalId()).hasSize(1);
         assertThat(longest.getExternalId()).hasSize(100);
@@ -45,7 +45,7 @@ class ActivationRequestTest {
     @MethodSource("invalidIdentifiers")
     void shouldRejectInvalidIdentifierInEveryField(String externalId, String customerId, String productCode) {
         assertThatIllegalArgumentException().isThrownBy(() ->
-                ActivationRequest.create(externalId, customerId, productCode, NOW));
+                ActivationRequest.create(externalId, customerId, productCode, NOW, "a".repeat(64)));
     }
 
     static Stream<Arguments> invalidIdentifiers() {
@@ -114,7 +114,7 @@ class ActivationRequestTest {
     }
 
     private ActivationRequest newRequest() {
-        return ActivationRequest.create("EXT-123", "CUSTOMER-1", "INTERNET-500", NOW);
+        return ActivationRequest.create("EXT-123", "CUSTOMER-1", "INTERNET-500", NOW, "a".repeat(64));
     }
 
     @Test

@@ -3,6 +3,7 @@ package br.com.deroyque.activation.request.application;
 import br.com.deroyque.activation.request.domain.ActivationRequest;
 import br.com.deroyque.activation.request.domain.RequestStatus;
 import br.com.deroyque.activation.request.persistence.ActivationRequestRepository;
+import br.com.deroyque.activation.security.CurrentConsumer;
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
@@ -21,21 +22,24 @@ public class ActivationRequestService {
 
     private final ActivationRequestRepository repository;
     private final RequestCreationTransaction creationTransaction;
+    private final CurrentConsumer consumer;
 
     public ActivationRequestService(ActivationRequestRepository repository,
-                                    RequestCreationTransaction creationTransaction) {
+                                    RequestCreationTransaction creationTransaction, CurrentConsumer consumer) {
         this.repository = repository;
         this.creationTransaction = creationTransaction;
+        this.consumer = consumer;
     }
 
     public CreationResult create(String externalId, String customerId, String productCode) {
+        String ownerId = consumer.ownerId();
         var existing = repository.findByExternalId(externalId);
         if (existing.isPresent()) {
-            return resolveRetry(existing.get(), customerId, productCode);
+            return resolveRetry(existing.get(), customerId, productCode, ownerId);
         }
 
         try {
-            var created = creationTransaction.insert(externalId, customerId, productCode);
+            var created = creationTransaction.insert(externalId, customerId, productCode, ownerId);
             return new CreationResult(created, true);
         } catch (DataIntegrityViolationException exception) {
             if (!isExternalIdConflict(exception)) {
@@ -43,18 +47,19 @@ public class ActivationRequestService {
             }
             // The insert transaction has already rolled back before this read.
             var winner = repository.findByExternalId(externalId).orElseThrow(() -> exception);
-            return resolveRetry(winner, customerId, productCode);
+            return resolveRetry(winner, customerId, productCode, ownerId);
         }
     }
 
     @Transactional(readOnly = true)
     public ActivationRequest get(UUID id) {
-        return repository.findById(id).orElseThrow(RequestNotFoundException::new);
+        return repository.findByIdAndOwnerId(id, consumer.ownerId()).orElseThrow(RequestNotFoundException::new);
     }
 
     @Transactional(readOnly = true)
     public Page<ActivationRequest> list(RequestStatus status, String customerId, int page, int size) {
-        Specification<ActivationRequest> filters = (root, query, builder) -> builder.conjunction();
+        String ownerId = consumer.ownerId();
+        Specification<ActivationRequest> filters = (root, query, builder) -> builder.equal(root.get("ownerId"), ownerId);
         if (status != null) {
             filters = filters.and((root, query, builder) -> builder.equal(root.get("status"), status));
         }
@@ -65,8 +70,9 @@ public class ActivationRequestService {
         return repository.findAll(filters, PageRequest.of(page, size, order));
     }
 
-    private CreationResult resolveRetry(ActivationRequest existing, String customerId, String productCode) {
-        if (!existing.getCustomerId().equals(customerId) || !existing.getProductCode().equals(productCode)) {
+    private CreationResult resolveRetry(ActivationRequest existing, String customerId, String productCode, String ownerId) {
+        if (!existing.getOwnerId().equals(ownerId) || !existing.getCustomerId().equals(customerId)
+                || !existing.getProductCode().equals(productCode)) {
             throw new RequestConflictException();
         }
         return new CreationResult(existing, false);
