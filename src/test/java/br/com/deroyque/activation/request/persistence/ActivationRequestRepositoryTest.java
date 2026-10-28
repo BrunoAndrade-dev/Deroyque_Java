@@ -120,6 +120,6 @@ class ActivationRequestRepositoryTest {
     }
 
     private ActivationRequest newRequest(String externalId) {
-        return ActivationRequest.create(externalId, "CUSTOMER-1", "INTERNET-500", NOW);
+        return ActivationRequest.create(externalId, "CUSTOMER-1", "INTERNET-500", NOW, "a".repeat(64));
     }
 }

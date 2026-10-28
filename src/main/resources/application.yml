@@ -1,4 +1,6 @@
 spring:
+  mvc:
+    log-request-details: false
   application:
     name: deroyque-test
   datasource:
@@ -14,12 +16,27 @@ spring:
         jdbc:
           time_zone: UTC
 
+server:
+  error:
+    include-exception: false
+    include-message: never
+    include-stacktrace: never
+    include-binding-errors: never
+
 logging:
+  level:
+    org.springframework.security: INFO
   pattern:
     correlation: "[traceId=%X{traceId:-}] "
 
 activation:
+  security:
+    issuer-uri: ${SECURITY_ISSUER_URI:}
+    jwk-set-uri: ${SECURITY_JWK_SET_URI:}
+    audience: ${SECURITY_AUDIENCE:}
   provider:
+    authentication:
+      token-file: ${PROVIDER_TOKEN_FILE:}
     base-url: ${PROVIDER_BASE_URL:http://localhost:8081}
     connect-timeout: ${PROVIDER_CONNECT_TIMEOUT:2s}
     read-timeout: ${PROVIDER_READ_TIMEOUT:5s}

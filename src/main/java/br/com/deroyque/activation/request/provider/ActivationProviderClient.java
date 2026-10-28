@@ -4,6 +4,7 @@ import br.com.deroyque.activation.request.processing.WorkItem;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Qualifier;
 
 import java.io.IOException;
 import java.net.http.HttpClient;
@@ -23,12 +24,15 @@ public class ActivationProviderClient {
     private final ObjectMapper mapper;
     private final ProviderProperties properties;
     private final Clock clock;
+    private final ProviderCredentials credentials;
 
-    public ActivationProviderClient(HttpClient client, ObjectMapper mapper, ProviderProperties properties, Clock clock) {
+    public ActivationProviderClient(@Qualifier("providerHttpClient") HttpClient client, ObjectMapper mapper,
+                                    ProviderProperties properties, Clock clock, ProviderCredentials credentials) {
         this.client = client;
         this.mapper = mapper;
         this.properties = properties;
         this.clock = clock;
+        this.credentials = credentials;
     }
 
     public ProviderOutcome activate(WorkItem work) {
@@ -39,12 +43,18 @@ public class ActivationProviderClient {
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("Cannot encode activation payload", exception);
         }
-        var request = HttpRequest.newBuilder(properties.baseUrl().resolve("/provider/v1/activate"))
+        var builder = HttpRequest.newBuilder(properties.baseUrl().resolve("/provider/v1/activate"))
                 .timeout(properties.readTimeout())
                 .header("Content-Type", "application/json")
                 .header("Idempotency-Key", IdempotencyKey.from(work.externalId()))
                 .header("X-Correlation-ID", work.correlationId())
-                .POST(HttpRequest.BodyPublishers.ofString(json)).build();
+                .POST(HttpRequest.BodyPublishers.ofString(json));
+        try {
+            credentials.bearerToken().ifPresent(token -> builder.header("Authorization", "Bearer " + token));
+        } catch (ProviderCredentialUnavailableException exception) {
+            return ProviderOutcome.retryable("CREDENTIAL_UNAVAILABLE", null);
+        }
+        var request = builder.build();
         try {
             var response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
             // Only status and headers are needed; close without consuming or retaining provider payloads.

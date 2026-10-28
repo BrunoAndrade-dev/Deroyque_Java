@@ -5,11 +5,11 @@ desafio Java Pleno/Sênior da Deroyque.
 
 ## Estado atual
 
-Etapas 1 a 4: estrutura Spring Boot, domínio, PostgreSQL, Flyway, API,
+Etapas 1 a 5: estrutura Spring Boot, domínio, PostgreSQL, Flyway, API,
 processamento assíncrono durável, provedor simulado com WireMock, retentativas,
-reconciliação e verificações de saúde. Segurança e empacotamento Docker da
-aplicação ainda serão implementados. O projeto ainda não é a entrega completa
-do desafio.
+reconciliação, segurança JWT/OAuth 2.0 e verificações de saúde. O empacotamento
+Docker da aplicação e a documentação final ainda serão implementados. O projeto
+ainda não é a entrega completa do desafio.
 
 ## Pré-requisitos
 
@@ -21,6 +21,9 @@ do desafio.
   credenciais configuradas manualmente. A primeira execução baixa as imagens.
 - Para executar a aplicação fora dos testes: PostgreSQL disponível e as
   variáveis de conexão configuradas conforme a seção abaixo.
+- Para chamadas autenticadas fora dos testes: um provedor OAuth 2.0 externo,
+  com JWTs RS256, issuer, JWK Set público e audiência configurados. Não existe
+  servidor de autenticação nem emissor de tokens na aplicação.
 
 ## Executar e testar
 
@@ -41,10 +44,18 @@ as variáveis no ambiente do processo:
 | `DB_USERNAME` | Usuário do banco |
 | `DB_PASSWORD` | Senha do banco |
 | `PROVIDER_BASE_URL` | Endereço do WireMock/provedor; padrão `http://localhost:8081` |
+| `SECURITY_ISSUER_URI` | Emissor confiável dos JWTs; obrigatório |
+| `SECURITY_JWK_SET_URI` | Endereço confiável das chaves públicas; obrigatório |
+| `SECURITY_AUDIENCE` | Audiência esperada para esta API; obrigatória |
+| `PROVIDER_TOKEN_FILE` | Caminho externo do arquivo de credencial do provedor; opcional para o mock |
 
 Forneça as credenciais pelo ambiente ou gerenciador de segredos, sem gravá-las
 em arquivos versionados. O usuário precisa de permissão para aplicar as
-migrações neste ambiente de desenvolvimento. Com o banco e o mock disponíveis:
+migrações neste ambiente de desenvolvimento. Configure os três parâmetros de
+segurança com os metadados públicos do seu emissor real. Sem esses valores, a
+aplicação falha na inicialização; não existe fallback que libere a API.
+Os testes configuram automaticamente um JWK Set local e chaves efêmeras, sem
+precisar de credenciais reais. Com banco, mock e segurança configurados:
 
 ```bash
 ./mvnw spring-boot:run
@@ -70,7 +81,8 @@ curl --fail http://localhost:8080/actuator/health/readiness
 
 Ambos devem retornar HTTP 200 com `{"status":"UP"}` em condições normais.
 Liveness verifica a aplicação; readiness inclui também a conexão com o banco.
-Nenhum dos dois comprova ativação de produtos, que ainda não foi implementada.
+Nenhum dos dois comprova que uma ativação específica foi concluída; esse resultado
+é acompanhado pelo endpoint da solicitação.
 
 ## Decisões iniciais
 
@@ -82,7 +94,7 @@ Nenhum dos dois comprova ativação de produtos, que ainda não foi implementada
   definido pelas migrações em `src/main/resources/db/migration`; Hibernate usa
   `ddl-auto=validate`, sem criar ou alterar tabelas automaticamente.
 - Entidade e repositório organizados por funcionalidade em `request/domain` e
-  `request/persistence`. A entidade não será usada diretamente como DTO da API.
+  `request/persistence`. A entidade não é usada diretamente como DTO da API.
 
 ## Domínio e persistência
 
@@ -102,8 +114,9 @@ Nenhum dos dois comprova ativação de produtos, que ainda não foi implementada
   leitura desatualizada falha, em vez de sobrescrever a atualização anterior.
 - Índices iniciais `(status, created_at, id)` e `(customer_id, created_at, id)`
   preparam consultas por estado/cliente com ordenação estável por data e UUID.
-  A consulta combinada e as consultas do processador serão avaliadas nas
-  respectivas etapas; índices adicionais dependerão dos padrões de acesso.
+  Índices parciais em `next_attempt_at` para pedidos pendentes e em
+  `processing_started_at` para pedidos em processamento apoiam o processador e
+  a recuperação. Índices adicionais dependerão dos padrões de acesso medidos.
 - A criação tenta inserir em uma transação própria. Em uma colisão na restrição
   de `external_id`, a transação já terminou e sofreu rollback antes de consultar
   o registro vencedor. Isso evita consultar uma transação abortada pelo
@@ -114,10 +127,33 @@ Nenhum dos dois comprova ativação de produtos, que ainda não foi implementada
 
 ## API
 
+Os endpoints de negócio exigem um access token JWT no header `Authorization`.
+Os exemplos abaixo usam Bash e uma função que entrega o header ao curl pela
+entrada padrão, evitando colocar o valor do token nos argumentos do processo.
+Obtenha o token do seu emissor externo pelo fluxo `client_credentials` e informe
+somente o token quando solicitado, sem o prefixo `Bearer`:
+
+```bash
+read -r -s -p 'Access token: ' ACCESS_TOKEN
+printf '\n'
+api_curl() {
+  if [[ ! "$ACCESS_TOKEN" =~ ^[A-Za-z0-9_-]+[.][A-Za-z0-9_-]+[.][A-Za-z0-9_-]+$ ]]; then
+    printf 'Formato de JWT inválido.\n' >&2
+    return 1
+  fi
+  printf 'header = "Authorization: Bearer %s"\n' "$ACCESS_TOKEN" | curl --config - "$@"
+}
+```
+
+Use apenas um JWT de três partes, sem quebras de linha ou aspas. Não ative
+`set -x`, `curl -v`, `--trace` ou dumps de headers, pois essas ferramentas podem
+revelar a credencial. Em produção, use HTTPS; HTTP local destina-se ao
+desenvolvimento controlado.
+
 ### Criar uma solicitação
 
 ```bash
-curl -i -X POST http://localhost:8080/api/v1/requests \
+api_curl -i -X POST http://localhost:8080/api/v1/requests \
   -H 'Content-Type: application/json' \
   -d '{"externalId":"EXT-12345","customerId":"CUST-10001","productCode":"INTERNET-500"}'
 ```
@@ -142,8 +178,9 @@ da entidade; a versão interna do registro não é exposta na resposta.
 | Situação | Resposta |
 | --- | --- |
 | Novo `externalId` com dados válidos | `201 Created` e `Location` |
-| Mesmo `externalId`, mesmo `customerId` e `productCode` | `200 OK`, com o registro e seu estado atual |
+| Mesmo consumidor, mesmo `externalId`, `customerId` e `productCode` | `200 OK`, com o registro e seu estado atual |
 | Mesmo `externalId`, `customerId` ou `productCode` diferente | `409 Conflict` |
+| `externalId` já vinculado a outro consumidor | `409 Conflict` genérico, sem devolver o registro |
 | Campos ausentes, nulos, em branco ou acima de 100 caracteres após `strip()` | `400 Bad Request` |
 
 Essas comparações usam os identificadores normalizados, preservando diferenças
@@ -153,22 +190,23 @@ criação e respostas de retry com o mesmo UUID, sem registros adicionais.
 ### Consultar pelo UUID
 
 ```bash
-curl -i http://localhost:8080/api/v1/requests/0b7f3c1e-5d2a-4c4e-9a51-2f8d7b1e6c90
+api_curl -i http://localhost:8080/api/v1/requests/0b7f3c1e-5d2a-4c4e-9a51-2f8d7b1e6c90
 ```
 
 Retorna `200 OK` com a representação atual, `404 Not Found` para UUID inexistente
-ou `400 Bad Request` para identificador em formato inválido.
+ou pertencente a outro consumidor, ou `400 Bad Request` para formato inválido.
 
 ### Listar e filtrar
 
 ```bash
-curl -i 'http://localhost:8080/api/v1/requests?status=PENDING&customerId=CUST-10001&page=0&size=20'
+api_curl -i 'http://localhost:8080/api/v1/requests?status=PENDING&customerId=CUST-10001&page=0&size=20'
 ```
 
 - `status` e `customerId` são filtros opcionais, aplicados em conjunto quando
   ambos estão presentes. Status aceitos: `PENDING`, `PROCESSING`, `COMPLETED`,
   `FAILED`. O filtro de cliente remove espaços das extremidades e exige de
   1 a 100 caracteres quando informado.
+- A consulta e seus totais consideram apenas registros do consumidor autenticado.
 - `page`: começa em zero, padrão `0`; `size`: de 1 a 100, padrão `20`.
   Parâmetros inválidos recebem `400`.
 - A ordenação é fixa: `createdAt` decrescente, com `id` decrescente para desempate.
@@ -176,6 +214,13 @@ curl -i 'http://localhost:8080/api/v1/requests?status=PENDING&customerId=CUST-10
   Uma página além do resultado retorna `200` com `content` vazio e os totais.
 - A ordenação é determinística para um mesmo conjunto de dados. A paginação por
   offset não mantém um snapshot entre chamadas se os registros forem alterados.
+
+Ao terminar as chamadas, remova a variável e a função do shell:
+
+```bash
+unset ACCESS_TOKEN
+unset -f api_curl
+```
 
 ### Erros e correlação
 
@@ -190,6 +235,111 @@ contiver apenas letras ASCII, números, ponto, hífen ou sublinhado. Caso contr�
 a aplicação gera um UUID. O mesmo identificador aparece em `traceId` nos erros e
 no contexto dos logs da requisição. Ele é persistido na criação e propagado nas
 tentativas assíncronas até o provedor, inclusive após reiniciar a aplicação.
+
+## Segurança
+
+A aplicação é um OAuth 2.0 Resource Server. O sistema consumidor obtém seu
+access token no servidor de autorização externo pelo fluxo `client_credentials`,
+adequado à comunicação entre sistemas sem usuário humano. As credenciais desse
+cliente pertencem ao consumidor e não precisam ser fornecidas à nossa API.
+A API verifica o token; não possui endpoint de login, emissão ou renovação.
+
+### Autenticação e autorização
+
+- Assinatura validada com chaves públicas do JWK Set explicitamente configurado.
+  Apenas RS256 é aceito; tokens sem assinatura, HMAC ou outros algoritmos são
+  rejeitados. Endereços de chaves enviados pelo próprio token não configuram
+  a origem de confiança.
+- `iss` deve corresponder ao emissor configurado; `aud` deve conter a audiência
+  desta API. `sub`, `iat` e `exp` são obrigatórios. A expiração e `nbf`, quando
+  presente, são verificados. Uma emissão futura além da tolerância também falha.
+  A tolerância de relógio é de 30 segundos; os relógios devem ser sincronizados.
+- `POST /api/v1/requests` exige `requests:write`. Os GETs individual e paginado
+  exigem `requests:read`. O token pode possuir ambos. Os scopes vêm de `scope`
+  ou `scp`; um claim `roles` sozinho não concede essas permissões.
+- Token ausente ou inválido recebe `401`. Token válido sem a permissão exigida
+  recebe `403`. Ambos usam ProblemDetail, correlação e mensagens genéricas, sem
+  detalhes da assinatura, claims ou texto da exceção.
+- Apenas os GETs de liveness/readiness são públicos e não expõem detalhes do
+  banco. Os demais recursos e métodos não autorizados são negados por padrão.
+- Além do scope, cada pedido pertence ao consumidor identificado pelo par
+  `iss`/`sub` do JWT validado. O vínculo interno é um hash estável desse par;
+  não contém nem depende do valor do token. Renovar o JWT preservando essa
+  identidade mantém a propriedade. O emissor deve fornecer um `sub` estável e
+  diferente para cada sistema consumidor.
+- A API define o dono na criação; não aceita atribuição de dono por campos do
+  JSON, query parameters ou headers de identidade. Consultas individuais de
+  outro consumidor recebem `404`. Listagem, filtros, paginação e totais já são
+  restringidos pelo dono na consulta ao banco.
+- `externalId` continua globalmente único. Uma repetição legítima só devolve
+  `200` ao mesmo consumidor. Outra identidade recebe conflito genérico, inclusive
+  se os dados forem iguais ou as inserções acontecerem simultaneamente. Isso não
+  revela o conteúdo do pedido, mas a regra global permite inferir que aquele
+  identificador está indisponível.
+- Registros anteriores à migração V3 não têm dono autenticado conhecido. Recebem
+  uma identidade reservada e permanecem inacessíveis pela API, sem serem apagados
+  ou atribuídos ao próximo chamador. Havendo dados legados reais, sua vinculação
+  precisa de um mapeamento confiável e uma migração administrativa específica.
+  Não existe endpoint público para transferir propriedade.
+
+### Proteção de tokens e transporte
+
+O bearer token de entrada é aceito apenas no header `Authorization`: não é
+obtido da URL, formulário ou cookie. Não é salvo no banco, nos logs, nos DTOs,
+em sessão HTTP, no código ou nos artefatos da aplicação. As respostas possuem
+controle de cache e não devolvem o header de autenticação recebido. O handler
+de segurança não serializa nem registra mensagens de exceções de autenticação.
+
+A API é stateless, sem formulário de login ou HTTP Basic. CSRF está desabilitado
+porque a autenticação não usa cookies/sessão enviados automaticamente pelo
+navegador; se esse modelo mudar, essa decisão deve ser revista.
+
+JWT assinado não é criptografado: seus claims podem ser lidos. Não inclua segredos
+no conteúdo e proteja o transporte com TLS no ambiente de produção, inclusive
+no caminho entre proxy e aplicação conforme o modelo de rede. O emissor e JWK
+Set exigem HTTPS; HTTP é permitido apenas em loopback para desenvolvimento.
+TLS e validação de certificados não são desabilitados.
+
+Os testes geram chaves privadas e tokens temporários somente na memória, com
+JWK Set simulado local. Nenhum emissor de teste ou chave privada é empacotado no
+JAR da aplicação ou da extensão do mock. Ainda será necessário configurar e
+validar um emissor real para uma implantação externa.
+
+As chaves públicas são armazenadas no cache do decoder e uma nova chave pode
+ser buscada quando um `kid` desconhecido aparece. A rotação deve publicar a chave
+nova antes de usá-la e manter a anterior durante a validade dos tokens antigos.
+A validação local não oferece revogação imediata de JWTs já emitidos; use tokens
+de curta duração e considere introspecção/controle de revogação se o contrato
+exigir essa capacidade.
+
+### Credencial do provedor e rotação
+
+A credencial de saída é independente do JWT recebido: o token do consumidor
+nunca é encaminhado ao provedor. Configure `PROVIDER_TOKEN_FILE` com o caminho
+de um arquivo de segredo montado fora do checkout, somente leitura e com acesso
+restrito ao usuário da aplicação. Não coloque o conteúdo em variável de build,
+Dockerfile, imagem, README ou repositório. O arquivo deve conter apenas a
+credencial, sem o prefixo `Bearer`; o cliente constrói o header internamente.
+
+O arquivo é lido a cada chamada. Substitua-o atomicamente ou use um volume de
+segredos com atualização atômica para realizar rotação sem reiniciar a aplicação.
+Não há cache do valor no serviço de credenciais. O provedor precisa aceitar o
+período de transição das credenciais conforme seu contrato.
+
+Arquivo configurado ausente, inválido, vazio ou maior que 8 KiB impede a chamada;
+ela não é enviada sem autenticação como fallback. O erro sanitizado
+`CREDENTIAL_UNAVAILABLE` segue o orçamento de retentativas. Uma credencial
+configurada exige HTTPS fora de loopback; redirecionamentos HTTP não são seguidos.
+Sem arquivo configurado, o mock local pode funcionar sem credencial.
+
+Arquivos de segredos, chaves e tokens têm padrões no `.gitignore` como proteção
+adicional. Isso não apaga vazamentos anteriores: em caso de exposição, revogue e
+rotacione a credencial e trate também o histórico e os registros afetados.
+Logs de proxy, infraestrutura e ferramentas externas também devem ocultar
+`Authorization`; as verificações da aplicação não substituem essa configuração.
+
+Limitação de taxa e limites adicionais de payload são possíveis evoluções de
+segurança; não são garantias implementadas nesta etapa.
 
 ## Processamento assíncrono e integração
 
@@ -342,6 +492,17 @@ ao mock; o serviço de ativação não interpreta esses códigos especiais.
   existe transação de banco aberta ao chamar o cliente HTTP real.
 - **Agendamento:** teste com rotinas habilitadas e provedor bloqueado confirma
   que o POST responde antes da conclusão e que o trabalho termina em background.
+- **Segurança:** JWTs assinados de verdade com chaves efêmeras e JWK Set HTTP
+  local; assinatura inválida, algoritmos não permitidos, issuer/audience,
+  expiração, claims obrigatórios, scopes, 401/403 e rotação de chaves públicas.
+  Testes também verificam ausência de token nas respostas, headers, banco e
+  logs capturados. Os testes de erros MVC usam usuário simulado apenas para
+  chegar ao controller; os testes de JWT não substituem o decoder real.
+- **Isolamento:** dois consumidores com os mesmos scopes, consultas cruzadas,
+  filtros e totais, renovação de token, tentativa de atribuir outro dono,
+  registros legados sem dono e disputa simultânea por um `externalId` global.
+- **Credencial do provedor:** leitura limitada, rejeição de arquivo inválido ou
+  ausente, proteção contra injeção de headers, HTTPS e rotação entre chamadas.
 - Os testes anteriores controlam o processador explicitamente, desabilitando
   somente o agendamento automático para manter as verificações determinísticas.
   A rotina automática é executada no teste específico de agendamento.
@@ -350,7 +511,6 @@ ao mock; o serviço de ativação não interpreta esses códigos especiais.
 
 ## Próximas etapas
 
-- OAuth 2.0 Resource Server, JWT e autorização por escopos.
 - Dockerfile, Docker Compose, testes adicionais e documentação completa exigida
   pelo enunciado, incluindo análise de produção e limitações conhecidas.
 - GitHub Actions, se o tempo permitir.

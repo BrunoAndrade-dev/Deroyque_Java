@@ -29,7 +29,7 @@ class ActivationProviderClientTest {
             .followRedirects(HttpClient.Redirect.NEVER).build();
     private final ActivationProviderClient client = new ActivationProviderClient(HTTP, new ObjectMapper(),
             new ProviderProperties(URI.create(SERVER.baseUrl()), Duration.ofMillis(200), Duration.ofSeconds(2)),
-            Clock.fixed(NOW, ZoneOffset.UTC));
+            Clock.fixed(NOW, ZoneOffset.UTC), credentials(URI.create(SERVER.baseUrl())));
     private final WorkItem work = new WorkItem(UUID.randomUUID(), UUID.randomUUID(), "EXT-123", "CUSTOMER",
             "PRODUCT", "provider-review", 1);
 
@@ -109,11 +109,16 @@ class ActivationProviderClientTest {
         unavailable.stop();
         var disconnected = new ActivationProviderClient(HTTP, new ObjectMapper(),
                 new ProviderProperties(address, Duration.ofMillis(200), Duration.ofSeconds(1)),
-                Clock.fixed(NOW, ZoneOffset.UTC));
+                Clock.fixed(NOW, ZoneOffset.UTC), credentials(address));
         assertThat(disconnected.activate(work).errorCode()).isEqualTo("IO_FAILURE");
     }
 
     private void stub(int status) {
         SERVER.stubFor(post(urlEqualTo("/provider/v1/activate")).willReturn(aResponse().withStatus(status)));
+    }
+
+    private ProviderCredentials credentials(URI address) {
+        return new ProviderCredentials(new ProviderCredentialProperties(null),
+                new ProviderProperties(address, Duration.ofMillis(200), Duration.ofSeconds(2)));
     }
 }

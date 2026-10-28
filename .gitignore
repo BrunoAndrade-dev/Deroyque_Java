@@ -7,3 +7,10 @@ target/
 !.env.example
 *.log
 .DS_Store
+secrets/
+*.key
+*.pem
+*.p12
+*.pfx
+*.token
+*.jwt

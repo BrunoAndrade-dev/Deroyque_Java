@@ -62,12 +62,15 @@ public class ActivationRequest {
     @Column(name = "correlation_id", nullable = false, length = 100, updatable = false)
     private String correlationId;
 
+    @Column(name = "owner_id", nullable = false, length = 64, updatable = false)
+    private String ownerId;
+
     protected ActivationRequest() {
         // Required by JPA.
     }
 
     private ActivationRequest(String externalId, String customerId, String productCode, Instant now,
-                              String correlationId) {
+                              String correlationId, String ownerId) {
         this.id = UUID.randomUUID();
         this.externalId = normalizeIdentifier(externalId, "externalId");
         this.customerId = normalizeIdentifier(customerId, "customerId");
@@ -80,15 +83,20 @@ public class ActivationRequest {
             throw new IllegalArgumentException("Invalid correlation ID");
         }
         this.correlationId = correlationId;
-    }
-
-    public static ActivationRequest create(String externalId, String customerId, String productCode, Instant now) {
-        return create(externalId, customerId, productCode, now, UUID.randomUUID().toString());
+        if (ownerId == null || !ownerId.matches("[0-9a-f]{64}")) {
+            throw new IllegalArgumentException("Invalid consumer identity");
+        }
+        this.ownerId = ownerId;
     }
 
     public static ActivationRequest create(String externalId, String customerId, String productCode,
-                                           Instant now, String correlationId) {
-        return new ActivationRequest(externalId, customerId, productCode, now, correlationId);
+                                           Instant now, String ownerId) {
+        return create(externalId, customerId, productCode, now, UUID.randomUUID().toString(), ownerId);
+    }
+
+    public static ActivationRequest create(String externalId, String customerId, String productCode,
+                                           Instant now, String correlationId, String ownerId) {
+        return new ActivationRequest(externalId, customerId, productCode, now, correlationId, ownerId);
     }
 
     public void startProcessing(Instant now) {
@@ -224,5 +232,9 @@ public class ActivationRequest {
 
     public String getCorrelationId() {
         return correlationId;
+    }
+
+    public String getOwnerId() {
+        return ownerId;
     }
 }

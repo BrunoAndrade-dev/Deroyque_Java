@@ -24,7 +24,7 @@ public class RequestCreationTransaction {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public ActivationRequest insert(String externalId, String customerId, String productCode) {
+    public ActivationRequest insert(String externalId, String customerId, String productCode, String ownerId) {
         // Match PostgreSQL timestamp precision so first creation and retries expose the same dates.
         Instant now = clock.instant().truncatedTo(ChronoUnit.MICROS);
         String correlationId = MDC.get("traceId");
@@ -32,6 +32,6 @@ public class RequestCreationTransaction {
             correlationId = UUID.randomUUID().toString();
         }
         return repository.saveAndFlush(ActivationRequest.create(externalId, customerId, productCode, now,
-                correlationId));
+                correlationId, ownerId));
     }
 }
