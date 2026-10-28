@@ -1,4 +1,6 @@
 spring:
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
   mvc:
     log-request-details: false
   application:
@@ -17,6 +19,7 @@ spring:
           time_zone: UTC
 
 server:
+  shutdown: graceful
   error:
     include-exception: false
     include-message: never

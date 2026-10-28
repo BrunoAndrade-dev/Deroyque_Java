@@ -5,11 +5,38 @@ desafio Java Pleno/Sênior da Deroyque.
 
 ## Estado atual
 
-Etapas 1 a 5: estrutura Spring Boot, domínio, PostgreSQL, Flyway, API,
+Etapas 1 a 6: estrutura Spring Boot, domínio, PostgreSQL, Flyway, API,
 processamento assíncrono durável, provedor simulado com WireMock, retentativas,
-reconciliação, segurança JWT/OAuth 2.0 e verificações de saúde. O empacotamento
-Docker da aplicação e a documentação final ainda serão implementados. O projeto
-ainda não é a entrega completa do desafio.
+reconciliação, segurança JWT/OAuth 2.0, verificações de saúde e Docker Compose.
+A revisão e a documentação final, incluindo o cenário de lentidão em produção,
+ainda estão pendentes. O projeto ainda não é a entrega completa do desafio.
+
+## Tutorial de execução com Docker
+
+Consulte o [tutorial detalhado de execução](docs/execucao.md). Ele explica o uso
+do terminal da nuvem, pré-requisitos, testes, configuração, inicialização,
+consultas, logs, persistência, reinício e solução de problemas.
+
+**Ainda não foi configurado um emissor OAuth 2.0 real.** Os testes funcionam com
+um emissor efêmero exclusivo dos testes. A execução manual autenticada exige
+configurar um emissor externo; o Compose não cria um servidor de autenticação
+nem desabilita a segurança.
+
+Com os metadados públicos do emissor e o arquivo externo de senha configurados
+conforme o tutorial:
+
+```bash
+docker compose up -d --build --wait --wait-timeout 180
+```
+
+O Compose inicia aplicação, PostgreSQL e WireMock. Apenas a API é publicada,
+em `127.0.0.1:8080`. Banco e mock são acessados pela rede interna do Compose.
+O build usa Maven 3.9.11/JDK 21; a imagem final usa apenas JRE 21, usuário
+`10001:10001` e o JAR necessário para cada serviço. O build das imagens compila
+os testes para gerar a extensão do mock, mas não os executa: use `./mvnw verify`
+separadamente. O banco usa volume persistente; aplicação e mock têm sistema de
+arquivos somente leitura e `/tmp` temporário. O desligamento da aplicação é
+gracioso, com prazo de 20 segundos por fase do Spring e 45 segundos no Compose.
 
 ## Pré-requisitos
 
@@ -495,6 +522,8 @@ ao mock; o serviço de ativação não interpreta esses códigos especiais.
 - **Segurança:** JWTs assinados de verdade com chaves efêmeras e JWK Set HTTP
   local; assinatura inválida, algoritmos não permitidos, issuer/audience,
   expiração, claims obrigatórios, scopes, 401/403 e rotação de chaves públicas.
+  Indisponibilidade HTTP e falha de conexão ao JWK Set também retornam 401
+  padronizado quando não é possível validar a chave necessária.
   Testes também verificam ausência de token nas respostas, headers, banco e
   logs capturados. Os testes de erros MVC usam usuário simulado apenas para
   chegar ao controller; os testes de JWT não substituem o decoder real.
@@ -511,8 +540,8 @@ ao mock; o serviço de ativação não interpreta esses códigos especiais.
 
 ## Próximas etapas
 
-- Dockerfile, Docker Compose, testes adicionais e documentação completa exigida
-  pelo enunciado, incluindo análise de produção e limitações conhecidas.
+- Revisão final e documentação completa exigida pelo enunciado, incluindo análise
+  de lentidão em produção, execução em produção e limitações conhecidas.
 - GitHub Actions, se o tempo permitir.
 
 ## Uso de inteligência artificial

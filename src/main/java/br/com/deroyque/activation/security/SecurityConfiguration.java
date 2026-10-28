@@ -12,6 +12,8 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.BadJwtException;
+import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.security.oauth2.jwt.JwtIssuerValidator;
 import org.springframework.security.oauth2.jwt.JwtTimestampValidator;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
@@ -43,7 +45,16 @@ public class SecurityConfiguration {
         decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
                 new JwtIssuerValidator(properties.issuerUri().toString()), timestamps,
                 new AccessTokenClaimsValidator(properties.audience(), Clock.systemUTC())));
-        return decoder;
+        return token -> {
+            try {
+                return decoder.decode(token);
+            } catch (JwtException exception) {
+                // Key retrieval failures must also follow the sanitized 401 path.
+                // A generic JwtException becomes AuthenticationServiceException
+                // in JwtAuthenticationProvider and can otherwise escape as 500.
+                throw new BadJwtException("Unable to validate access token.");
+            }
+        };
     }
 
     @Bean

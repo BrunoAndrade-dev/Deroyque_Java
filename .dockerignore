@@ -1,0 +1,18 @@
+**
+!pom.xml
+!src/
+!src/**
+!docker/
+!docker/Healthcheck.java
+!mock-provider/
+!mock-provider/**
+# Keep credentials out even if accidentally placed under an allowed directory.
+**/.env*
+**/secrets/**
+**/*.key
+**/*.pem
+**/*.p12
+**/*.pfx
+**/*.token
+**/*.jwt
+**/*.log
