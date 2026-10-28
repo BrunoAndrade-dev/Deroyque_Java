@@ -18,6 +18,19 @@ logging:
   pattern:
     correlation: "[traceId=%X{traceId:-}] "
 
+activation:
+  provider:
+    base-url: ${PROVIDER_BASE_URL:http://localhost:8081}
+    connect-timeout: ${PROVIDER_CONNECT_TIMEOUT:2s}
+    read-timeout: ${PROVIDER_READ_TIMEOUT:5s}
+  processing:
+    enabled: ${PROCESSING_ENABLED:true}
+    max-attempts: ${PROCESSING_MAX_ATTEMPTS:3}
+    retry-delay: ${PROCESSING_RETRY_DELAY:1s}
+    processing-timeout: ${PROCESSING_TIMEOUT:60s}
+    poll-interval: ${PROCESSING_POLL_INTERVAL:1s}
+    recovery-interval: ${PROCESSING_RECOVERY_INTERVAL:5s}
+
 management:
   endpoints:
     web:

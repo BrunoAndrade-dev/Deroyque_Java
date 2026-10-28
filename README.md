@@ -5,11 +5,11 @@ desafio Java Pleno/Sênior da Deroyque.
 
 ## Estado atual
 
-Etapas 1 a 3: estrutura Spring Boot, domínio, PostgreSQL, migração Flyway,
-criação, consulta, listagem paginada, erros padronizados e verificações HTTP de
-saúde. O processamento assíncrono, a integração e a segurança ainda não foram
-implementados. As solicitações criadas permanecem em `PENDING` nesta etapa.
-O projeto ainda não é a entrega completa do desafio.
+Etapas 1 a 4: estrutura Spring Boot, domínio, PostgreSQL, Flyway, API,
+processamento assíncrono durável, provedor simulado com WireMock, retentativas,
+reconciliação e verificações de saúde. Segurança e empacotamento Docker da
+aplicação ainda serão implementados. O projeto ainda não é a entrega completa
+do desafio.
 
 ## Pré-requisitos
 
@@ -40,10 +40,11 @@ as variáveis no ambiente do processo:
 | `DB_URL` | URL JDBC; padrão `jdbc:postgresql://localhost:5432/deroyque` |
 | `DB_USERNAME` | Usuário do banco |
 | `DB_PASSWORD` | Senha do banco |
+| `PROVIDER_BASE_URL` | Endereço do WireMock/provedor; padrão `http://localhost:8081` |
 
 Forneça as credenciais pelo ambiente ou gerenciador de segredos, sem gravá-las
 em arquivos versionados. O usuário precisa de permissão para aplicar as
-migrações neste ambiente de desenvolvimento. Com o banco disponível:
+migrações neste ambiente de desenvolvimento. Com o banco e o mock disponíveis:
 
 ```bash
 ./mvnw spring-boot:run
@@ -89,8 +90,9 @@ Nenhum dos dois comprova ativação de produtos, que ainda não foi implementada
 - `externalId`, `customerId` e `productCode`: obrigatórios, de 1 a 100 caracteres
   após remoção de espaços nas extremidades, sem converter maiúsculas/minúsculas.
   Neste estágio, o comprimento é medido por `String.length()` do Java.
-- Fluxo atual: `PENDING -> PROCESSING -> COMPLETED` ou `FAILED`. Métodos de
-  domínio controlam as transições; não existe setter livre para status.
+- Fluxo: `PENDING -> PROCESSING -> COMPLETED` ou `FAILED`. Falhas temporárias
+  podem retornar a `PENDING`, respeitando a próxima tentativa e o limite.
+  Métodos de domínio controlam as transições; não existe setter livre para status.
 - `createdAt` permanece imutável. Cada transição atualiza `updatedAt`; ambos
   usam `Instant`, armazenado como `TIMESTAMP WITH TIME ZONE` no PostgreSQL.
   O instante é recebido pelo domínio, permitindo testes com datas fixas.
@@ -186,8 +188,135 @@ Cada resposta inclui `X-Correlation-ID`. Um identificador recebido nesse header
 é reutilizado se tiver de 1 a 100 caracteres, começar com letra ou número e
 contiver apenas letras ASCII, números, ponto, hífen ou sublinhado. Caso contrário,
 a aplicação gera um UUID. O mesmo identificador aparece em `traceId` nos erros e
-no contexto dos logs da requisição. Sua propagação ao provedor será adicionada
-junto da integração.
+no contexto dos logs da requisição. Ele é persistido na criação e propagado nas
+tentativas assíncronas até o provedor, inclusive após reiniciar a aplicação.
+
+## Processamento assíncrono e integração
+
+O POST persiste e confirma a criação sem aguardar o provedor. Uma rotina do
+Spring procura pedidos disponíveis no próprio PostgreSQL. Não há fila apenas
+em memória nem dependência de um evento disparado depois do commit: um pedido
+confirmado continua disponível no banco se a aplicação cair antes de enviá-lo.
+
+1. Em uma transação curta, seleciona um pedido devido com
+   `FOR UPDATE SKIP LOCKED`, marca `PROCESSING`, incrementa `attemptCount` e
+   atribui um identificador à tentativa. A transação termina antes da chamada HTTP.
+2. Chama `POST /provider/v1/activate` com os dados de negócio e os headers
+   `Idempotency-Key` e `X-Correlation-ID`.
+3. Em outra transação curta, confere o identificador da tentativa e grava o
+   resultado. Um resultado de uma tentativa antiga é descartado.
+
+Cada instância tem um processador sequencial e uma rotina de reconciliação em
+threads separadas. O ciclo processa até dez itens, reservando cada um apenas
+antes de enviá-lo. O lock é liberado antes da chamada remota; o estado durável e
+o identificador da tentativa protegem a atualização posterior. Outras instâncias
+podem selecionar pedidos diferentes sem aguardar um registro já bloqueado.
+`@Version` continua protegendo alterações concorrentes na entidade.
+
+| Retorno do provedor | Resultado | Nova tentativa automática |
+| --- | --- | --- |
+| Qualquer `2xx` | `COMPLETED` | Não |
+| `400` e demais `4xx` permanentes | `FAILED` | Não |
+| `429` | `PENDING` enquanto houver tentativas | Sim, respeitando `Retry-After` válido |
+| `500`, `502`, `503`, `504` | `PENDING` enquanto houver tentativas | Sim; `503` também respeita `Retry-After` |
+| Timeout ou falha de conexão/I/O | `PENDING` enquanto houver tentativas | Sim, com a mesma chave de idempotência |
+| Limite de tentativas alcançado | `FAILED` | Não |
+
+Outros status, incluindo redirecionamentos e `501`, são tratados como falha
+permanente; o cliente não segue redirecionamentos. Apenas status e headers são
+usados: o corpo da resposta do provedor é fechado sem ser armazenado ou exposto.
+`lastError` contém apenas códigos sanitizados, como `HTTP_400` ou `TIMEOUT`.
+Como a integração é assíncrona, o consumidor acompanha essas falhas consultando
+o estado; o POST original não muda retroativamente para uma resposta de erro.
+
+### Tentativas, timeouts e idempotência
+
+São três tentativas **no total**, com esperas mínimas de um segundo após a
+primeira falha e dois segundos após a segunda. O banco guarda `nextAttemptAt`;
+nenhuma transação fica aberta esperando o backoff. `Retry-After` aceita segundos
+ou data HTTP: vale o maior prazo entre esse header e o backoff. Headers inválidos
+são ignorados, preservando o backoff. O agendamento pode executar depois do prazo,
+conforme a consulta periódica e a carga, mas não deve executar antes dele.
+
+O cliente HTTP Java tem timeout de conexão e um limite para obter a resposta.
+Não lê o corpo do provedor, pois a decisão depende apenas do status. Os padrões
+são 2 segundos para conexão e 5 segundos para a resposta.
+
+A chave é o SHA-256 do `externalId` normalizado, estável em todas as tentativas.
+Hash não é criptografia nem substitui autorização. O contrato esperado do
+provedor real deve garantir o mesmo efeito para repetições da chave e rejeitar
+conteúdo divergente. Sem essa garantia externa, a aplicação não pode prometer
+uma única ativação após um timeout ou queda entre a ativação e o registro local.
+
+`FAILED` após timeout significa que não foi possível confirmar o sucesso dentro
+do limite. O produto pode ter sido ativado externamente e exigir consulta ou
+reconciliação operacional com o provedor; não há endpoint de reprocessamento
+manual nesta entrega.
+
+### Recuperação após interrupção
+
+A rotina procura pedidos em `PROCESSING` há pelo menos 60 segundos, usando
+`processingStartedAt`. Se houver orçamento de tentativas, retorna a `PENDING`
+com backoff; caso contrário, marca `FAILED`. A tentativa reservada conta no
+limite mesmo que a aplicação caia antes de efetuar a chamada. O prazo de
+recuperação deve ser maior que os timeouts do cliente; a configuração verifica
+que ele excede a soma dos limites de conexão e resposta.
+
+Cada nova tentativa tem um token próprio. Uma resposta atrasada, cujo token já
+foi substituído ou invalidado, não altera o pedido. A chave de idempotência do
+provedor continua igual. Essa distinção protege o estado local e o efeito remoto.
+
+Em maior escala, consideraríamos fila com entrega pelo menos uma vez, outbox
+transacional quando necessário, leases renováveis e reconciliação consultando
+o resultado no provedor. Ainda seriam necessárias idempotência externa e
+proteção contra resultados antigos; uma fila sozinha não resolve essas questões.
+
+### Configurações do processador
+
+| Variável | Padrão | Função |
+| --- | --- | --- |
+| `PROCESSING_ENABLED` | `true` | Ativa as rotinas automáticas |
+| `PROCESSING_MAX_ATTEMPTS` | `3` | Total de tentativas; configuração aceita de 1 a 10 |
+| `PROCESSING_RETRY_DELAY` | `1s` | Base do backoff exponencial |
+| `PROCESSING_TIMEOUT` | `60s` | Prazo para considerar uma tentativa abandonada |
+| `PROCESSING_POLL_INTERVAL` | `1s` | Intervalo após um ciclo de processamento |
+| `PROCESSING_RECOVERY_INTERVAL` | `5s` | Intervalo após um ciclo de recuperação |
+| `PROVIDER_CONNECT_TIMEOUT` | `2s` | Limite de conexão HTTP |
+| `PROVIDER_READ_TIMEOUT` | `5s` | Limite para obter a resposta HTTP |
+
+## Mock WireMock
+
+O build também gera `target/deroyque-test-0.0.1-SNAPSHOT-provider-mock.jar`, uma
+extensão exclusiva do mock, separada do JAR da aplicação. A dependência WireMock
+tem escopo de teste e não é incorporada à aplicação de produção.
+
+Depois de `./mvnw verify`, em Linux/macOS, execute o mock em outro terminal:
+
+```bash
+java -cp "$HOME/.m2/repository/org/wiremock/wiremock-standalone/3.13.1/wiremock-standalone-3.13.1.jar:target/deroyque-test-0.0.1-SNAPSHOT-provider-mock.jar" \
+  wiremock.Run --port 8081 --root-dir mock-provider \
+  --extensions br.com.deroyque.activation.support.IdempotentProviderMock
+```
+
+Se o repositório Maven local estiver em outro diretório, ajuste o primeiro
+caminho do classpath. No Windows, use `;` como separador do classpath.
+
+O mock compara o conteúdo associado à chave, confirma uma ativação apenas uma
+vez e devolve sucesso para repetições já ativadas. A mesma chave com conteúdo
+diferente recebe `409`. Os seguintes `productCode` controlam cenários locais:
+
+| Produto | Comportamento |
+| --- | --- |
+| `INTERNET-500` ou outro valor comum | Sucesso imediato |
+| `PERMANENT_FAILURE` | HTTP 400 |
+| `TEMPORARY_FAILURE` | Duas respostas 500, depois sucesso |
+| `RATE_LIMITED` | Primeiro 429 com `Retry-After: 2`, depois sucesso |
+| `TIMEOUT_AFTER_ACTIVATION` | Ativa, atrasa a primeira resposta por 6 segundos; repetição recebe sucesso sem reativar |
+
+O estado do mock fica em memória e é perdido ao reiniciá-lo. Em um provedor real,
+o registro de idempotência precisa ser durável e ter retenção compatível com o
+prazo de retries e reconciliação. As regras especiais de produto pertencem apenas
+ao mock; o serviço de ativação não interpreta esses códigos especiais.
 
 ## Estratégia de testes atual
 
@@ -205,12 +334,22 @@ junto da integração.
   violação de unicidade esperada e outras falhas de integridade.
 - **MVC:** JSON inválido, tipo de conteúdo não suportado, erro inesperado sem
   vazamento de detalhes e validação do identificador de correlação.
+- **Provedor:** HTTP real contra WireMock, classificação de status, parsing de
+  `Retry-After`, falha de conexão, headers e payload.
+- **Processamento:** PostgreSQL real e relógio controlado para verificar backoff,
+  limite, recuperação, token de tentativa, disputa entre quatro processadores e
+  timeout após ativação, sem duplicar o efeito no mock. Um spy verifica que não
+  existe transação de banco aberta ao chamar o cliente HTTP real.
+- **Agendamento:** teste com rotinas habilitadas e provedor bloqueado confirma
+  que o POST responde antes da conclusão e que o trabalho termina em background.
+- Os testes anteriores controlam o processador explicitamente, desabilitando
+  somente o agendamento automático para manter as verificações determinísticas.
+  A rotina automática é executada no teste específico de agendamento.
 - Nenhum teste é desabilitado automaticamente quando Docker está indisponível;
   essa condição é uma falha de infraestrutura a corrigir.
 
 ## Próximas etapas
 
-- Processamento assíncrono, WireMock, idempotência, retentativas e reconciliação.
 - OAuth 2.0 Resource Server, JWT e autorização por escopos.
 - Dockerfile, Docker Compose, testes adicionais e documentação completa exigida
   pelo enunciado, incluindo análise de produção e limitações conhecidas.
@@ -218,16 +357,8 @@ junto da integração.
 
 ## Uso de inteligência artificial
 
-O candidato é responsável pelas decisões do projeto e orienta o desenvolvimento,
-incluindo o escopo, as regras de negócio e as escolhas técnicas. O assistente de
-IA atua como ferramenta de apoio: esclarece alternativas e consequências,
-explica conceitos e implementa código, testes e documentação conforme as
-orientações do candidato.
-
-A assistência de IA foi utilizada na preparação do ambiente, na implementação
-das funcionalidades, na elaboração e execução de testes e na documentação. Os
-resultados são apresentados ao candidato para revisão. As etapas 1 e 2 foram
-discutidas e revisadas conceitualmente com o candidato; a revisão da etapa 3 está
-em andamento. A declaração será atualizada para refletir somente atividades
-efetivamente realizadas, sem afirmar que toda a solução já foi compreendida ou
-validada pelo candidato antes da conclusão dessa revisão.
+Utilizei inteligência artificial como agente auxiliar na preparação do ambiente,
+na implementação de código, na elaboração e execução de testes e na documentação.
+Eu defini e aprovei o escopo, as regras de negócio e as decisões técnicas. Usei a
+ferramenta para esclarecer dúvidas, discutir alternativas e implementar conforme
+minhas orientações.

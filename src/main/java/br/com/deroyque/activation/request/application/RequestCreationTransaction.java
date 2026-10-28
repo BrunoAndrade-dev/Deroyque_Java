@@ -5,10 +5,12 @@ import br.com.deroyque.activation.request.persistence.ActivationRequestRepositor
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.slf4j.MDC;
 
 import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.UUID;
 
 @Component
 public class RequestCreationTransaction {
@@ -25,6 +27,11 @@ public class RequestCreationTransaction {
     public ActivationRequest insert(String externalId, String customerId, String productCode) {
         // Match PostgreSQL timestamp precision so first creation and retries expose the same dates.
         Instant now = clock.instant().truncatedTo(ChronoUnit.MICROS);
-        return repository.saveAndFlush(ActivationRequest.create(externalId, customerId, productCode, now));
+        String correlationId = MDC.get("traceId");
+        if (correlationId == null) {
+            correlationId = UUID.randomUUID().toString();
+        }
+        return repository.saveAndFlush(ActivationRequest.create(externalId, customerId, productCode, now,
+                correlationId));
     }
 }
