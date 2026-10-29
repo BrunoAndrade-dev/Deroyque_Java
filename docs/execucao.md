@@ -43,13 +43,37 @@ emissor simulado **somente nos testes**. Por isso:
 
 - Os testes completos podem ser executados agora, sem tokens ou credenciais reais.
 - As imagens Docker podem ser construídas sem um emissor.
-- Para iniciar o Compose conforme a configuração publicada e chamar a API
-  manualmente, será necessário fornecer os metadados de um emissor externo.
+- Para chamar os endpoints de negócio manualmente com autenticação, será
+  necessário configurar um emissor externo e obter um token válido.
 
 O projeto não possui endpoint de login nem gera tokens para uso manual.
 Não substitua os metadados por endereços inventados para considerar a segurança
 validada. Uma aplicação com health `UP` não comprova que um emissor está acessível
 ou que um JWT será aceito: a obtenção das chaves ocorre quando necessária.
+
+### Diagnóstico local sem emissor
+
+A integração manual com um emissor real foi reservada como melhoria futura para
+a etapa 7. Para verificar somente a infraestrutura e a rejeição de acesso anônimo,
+use no `.env` os valores abaixo, junto do caminho real de `DB_PASSWORD_FILE`:
+
+```dotenv
+SECURITY_ISSUER_URI=https://issuer.invalid
+SECURITY_JWK_SET_URI=https://issuer.invalid/jwks
+SECURITY_AUDIENCE=deroyque-local-diagnostic
+```
+
+O domínio reservado `.invalid` não representa um emissor real. Essa configuração
+permite iniciar a aplicação porque ela não busca chaves no startup, mas não gera
+tokens nem permite operações autenticadas. Não a use em produção nem considere
+um health UP como validação de OAuth.
+
+Com as imagens construídas e o segredo do banco preparado, siga os comandos das
+seções 8 e 9: `config --quiet`, `up --no-build --wait --wait-timeout 180` e `ps`.
+Os health checks devem retornar 200; consultas sem token devem retornar 401.
+Os fluxos autenticados continuam sendo verificados por `./mvnw verify`.
+As instruções posteriores que pedem emissor e token reais referem-se à futura
+execução manual autenticada.
 
 ## 3. Conferir as ferramentas
 
@@ -97,18 +121,10 @@ O comando também gera o JAR da aplicação e a extensão separada do mock em
 `target/`. Os relatórios ficam em `target/surefire-reports/`. Esses arquivos
 gerados não devem ser commitados.
 
-Na configuração atual deste ambiente da nuvem, o JDK e o Maven foram preparados
-em caminhos locais. Se o terminal ainda não estiver configurado para eles:
-
-```bash
-export JAVA_HOME=/workspace/toolchains/jdk21/usr/lib/jvm/java-21-openjdk-amd64
-export PATH="$JAVA_HOME/bin:$PATH"
-export MAVEN_USER_HOME=/workspace/toolchains/maven
-./mvnw -B -ntp -s /workspace/toolchains/maven/settings.xml verify
-```
-
-Esses caminhos pertencem à sessão da nuvem e não são requisitos do projeto.
-Em outra máquina com JDK 21 e acesso normal à rede, use `./mvnw verify`.
+No IntelliJ, configure o Project SDK e o JDK do Maven como Java 21. No terminal,
+use `JAVA_HOME` e `PATH` da instalação de JDK da sua máquina. Caminhos de ferramentas
+de uma sessão da nuvem não são requisitos do projeto. Proxy e certificados são
+configurações do ambiente; veja o apêndice quando necessário.
 
 ## 5. Entender os três serviços
 
@@ -245,6 +261,32 @@ Os dois primeiros devem devolver `200` e `{"status":"UP"}`. O terceiro deve
 devolver `401`, porque não recebeu token. Isso é esperado. Readiness inclui o
 banco; não comprova acesso ao emissor nem sucesso do provedor externo.
 `/actuator/health` agregado não é público; use as duas URLs completas acima.
+
+### Explorar os endpoints pelo Swagger UI
+
+Com o Compose iniciado, abra no navegador da mesma máquina:
+
+```text
+http://localhost:8080/swagger-ui.html
+```
+
+Se mudou `APP_PORT`, ajuste a porta na URL. Expanda uma operação para ver os campos,
+exemplos, filtros e respostas. Clique em **Try it out**, preencha os dados e clique
+em **Execute**. O resultado aparece na própria página.
+
+No diagnóstico sem emissor, as operações de negócio retornam 401. O Swagger não
+emite tokens. No futuro, com um JWT válido, clique em **Authorize** e informe só o
+token, sem `Bearer`; a interface acrescenta o header. Escopos e isolamento continuam
+valendo. A autorização não é persistida entre recarregamentos; use **Logout** no
+diálogo de autorização ao terminar e não compartilhe capturas com credenciais.
+
+O Compose habilita a documentação por padrão. Configure `SWAGGER_ENABLED=false`
+para desativar. Fora do Compose, ela vem desativada e exige `SWAGGER_ENABLED=true`.
+Após atualizar o código, reconstrua a imagem antes de abrir a página:
+
+```bash
+docker compose up -d --build --wait --wait-timeout 180
+```
 
 ## 10. Criar e acompanhar uma solicitação autenticada
 

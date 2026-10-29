@@ -1,10 +1,11 @@
 package br.com.deroyque.activation.request.provider;
 
 import br.com.deroyque.activation.request.processing.WorkItem;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.stereotype.Component;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.net.http.HttpClient;
@@ -12,10 +13,10 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.net.http.HttpTimeoutException;
 import java.time.Clock;
+import java.time.DateTimeException;
 import java.time.Instant;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
-import java.time.DateTimeException;
 
 @Component
 public class ActivationProviderClient {

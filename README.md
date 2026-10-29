@@ -113,6 +113,17 @@ Nenhum dos dois comprova que uma ativação específica foi concluída; esse res
 
 ## Decisões iniciais
 
+- Swagger UI/OpenAPI com springdoc 2.8.17 para documentar os endpoints. No Compose
+  local, abra `http://localhost:8080/swagger-ui.html`; o JSON fica em `/v3/api-docs`.
+  Use **Try it out → Execute** para enviar uma chamada. **Authorize** aceita um JWT
+  válido sem o prefixo `Bearer`; a autorização não é persistida entre recarregamentos.
+  A página não emite tokens nem libera operações protegidas. Sem emissor real,
+  o diagnóstico permite explorar a documentação e observar respostas 401.
+  Fora do Compose, a documentação vem desativada: habilite com `SWAGGER_ENABLED=true`.
+  O Compose local habilita por padrão; `SWAGGER_ENABLED=false` desativa. Em produção,
+  mantenha desativada ou restrinja seu acesso na infraestrutura. Use navegador
+  confiável e HTTPS fora de localhost; encerre a autorização ao terminar.
+
 - Java 21, Spring Boot 3.5.16 e Maven 3.9.11 fixados no projeto.
 - Spring MVC para HTTP, Bean Validation para validação dos DTOs e
   Actuator para saúde da aplicação.
@@ -128,7 +139,7 @@ Nenhum dos dois comprova que uma ativação específica foi concluída; esse res
 - UUID interno gerado na criação e estado inicial `PENDING`.
 - `externalId`, `customerId` e `productCode`: obrigatórios, de 1 a 100 caracteres
   após remoção de espaços nas extremidades, sem converter maiúsculas/minúsculas.
-  Neste estágio, o comprimento é medido por `String.length()` do Java.
+  O comprimento é medido por `String.length()` do Java.
 - Fluxo: `PENDING -> PROCESSING -> COMPLETED` ou `FAILED`. Falhas temporárias
   podem retornar a `PENDING`, respeitando a próxima tentativa e o limite.
   Métodos de domínio controlam as transições; não existe setter livre para status.
@@ -543,6 +554,9 @@ ao mock; o serviço de ativação não interpreta esses códigos especiais.
 - Revisão final e documentação completa exigida pelo enunciado, incluindo análise
   de lentidão em produção, execução em produção e limitações conhecidas.
 - GitHub Actions, se o tempo permitir.
+- Integração e validação manual com um emissor OAuth 2.0 real como melhoria futura,
+  a documentar na etapa 7. Não adicionar Auth0, Keycloak ou outro emissor agora;
+  manter a emissão simulada exclusivamente nos testes.
 
 ## Uso de inteligência artificial
 

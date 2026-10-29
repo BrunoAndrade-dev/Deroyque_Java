@@ -11,8 +11,8 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
-import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.BadJwtException;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.security.oauth2.jwt.JwtIssuerValidator;
 import org.springframework.security.oauth2.jwt.JwtTimestampValidator;
@@ -72,6 +72,8 @@ public class SecurityConfiguration {
                 .authorizeHttpRequests(access -> access
                         .requestMatchers(HttpMethod.GET, "/actuator/health/liveness", "/actuator/health/readiness")
                         .permitAll()
+                        .requestMatchers(HttpMethod.GET, "/swagger-ui.html", "/swagger-ui/**",
+                                "/v3/api-docs", "/v3/api-docs/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/requests").hasAuthority("SCOPE_requests:write")
                         .requestMatchers(HttpMethod.GET, "/api/v1/requests", "/api/v1/requests/*")
                         .hasAuthority("SCOPE_requests:read")

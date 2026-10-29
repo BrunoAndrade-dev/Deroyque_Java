@@ -15,6 +15,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 public class ProcessingScheduler {
 
     private static final Logger log = LoggerFactory.getLogger(ProcessingScheduler.class);
+    private static final int MAX_REQUESTS_PER_CYCLE = 10;
     private final ActivationProcessor processor;
     private final ProcessingTransactions transactions;
 
@@ -36,8 +37,10 @@ public class ProcessingScheduler {
     @Scheduled(fixedDelayString = "${activation.processing.poll-interval:1s}")
     public void processPending() {
         try {
-            for (int i = 0; i < 10 && processor.processNext(); i++) {
-                // Each item is claimed just before its HTTP call, not as a long-lived batch reservation.
+            for (int i = 0; i < MAX_REQUESTS_PER_CYCLE; i++) {
+                if (!processor.processNext()) {
+                    break;
+                }
             }
         } catch (RuntimeException exception) {
             log.error("Processing cycle failed: type={}", exception.getClass().getSimpleName());
