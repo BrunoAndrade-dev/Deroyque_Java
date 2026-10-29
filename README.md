@@ -13,6 +13,11 @@ ainda estão pendentes. O projeto ainda não é a entrega completa do desafio.
 
 ## Tutorial de execução com Docker
 
+Para criar e consultar pedidos manualmente pelo Swagger sem um emissor real,
+use a [demonstração autenticada de teste](docs/demo-swagger.md). Ela inicia recursos
+temporários independentes, mantém a segurança e não altera o `.env` ou o Compose.
+O emissor e o launcher ficam exclusivamente em `src/test`, fora do JAR de produção.
+
 Consulte o [tutorial detalhado de execução](docs/execucao.md). Ele explica o uso
 do terminal da nuvem, pré-requisitos, testes, configuração, inicialização,
 consultas, logs, persistência, reinício e solução de problemas.

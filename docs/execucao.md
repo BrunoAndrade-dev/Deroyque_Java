@@ -264,6 +264,10 @@ banco; não comprova acesso ao emissor nem sucesso do provedor externo.
 
 ### Explorar os endpoints pelo Swagger UI
 
+Para testar criação, consulta e retentativas manualmente com JWT temporário,
+consulte a [demonstração separada](demo-swagger.md). Use o Swagger da porta 8090
+nessa execução. Os passos abaixo referem-se ao Swagger do Compose, na porta 8080.
+
 Com o Compose iniciado, abra no navegador da mesma máquina:
 
 ```text
