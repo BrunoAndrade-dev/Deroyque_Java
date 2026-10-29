@@ -8,6 +8,10 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * Executa uma tentativa com reserva e conclusão transacionais separadas. A integração HTTP ocorre sem
+ * transação de banco e mantém a correlação da criação.
+ */
 @Component
 public class ActivationProcessor {
 
@@ -15,11 +19,23 @@ public class ActivationProcessor {
     private final ProcessingTransactions transactions;
     private final ActivationProviderClient provider;
 
+    /**
+     * Recebe operações transacionais e cliente remoto mantidos separados.
+     *
+     * @param transactions operações transacionais do processador.
+     * @param provider cliente que executa a integração HTTP fora da transação de banco.
+     */
     public ActivationProcessor(ProcessingTransactions transactions, ActivationProviderClient provider) {
         this.transactions = transactions;
         this.provider = provider;
     }
 
+    /**
+     * Reserva um item, chama o provedor sem transação e conclui em nova transação, preservando e
+     * restaurando o MDC.
+     *
+     * @return false quando não há trabalho elegível; true quando uma tentativa foi executada.
+     */
     @Transactional(propagation = Propagation.NEVER)
     public boolean processNext() {
         var claimed = transactions.claimNext();

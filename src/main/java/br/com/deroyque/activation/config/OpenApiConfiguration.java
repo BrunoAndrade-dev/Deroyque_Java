@@ -11,9 +11,17 @@ import org.springframework.context.annotation.Configuration;
 
 import java.util.List;
 
+/**
+ * Define o contrato OpenAPI, o esquema Bearer e as orientações de autenticação exibidas no Swagger.
+ */
 @Configuration(proxyBeanMethods = false)
 public class OpenApiConfiguration {
 
+    /**
+     * Publica descrições e autenticação Bearer no contrato da API.
+     *
+     * @return contrato OpenAPI com servidor relativo à origem atual.
+     */
     @Bean
     OpenAPI activationOpenApi() {
         return new OpenAPI()

@@ -24,7 +24,10 @@ import java.util.concurrent.CountDownLatch;
 import static com.github.tomakehurst.wiremock.client.WireMock.*;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
 
-/** Explicit test-classpath launcher; no demo beans or bypasses enter production. */
+/**
+ * Launcher explícito no classpath de testes que coordena recursos descartáveis para o Swagger. Executa
+ * as classes de produção com JWT real e propriedades isoladas, sem bypass de segurança.
+ */
 public final class SwaggerDemoApplication implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(SwaggerDemoApplication.class);
     private PostgreSQLContainer<?> database;
@@ -32,8 +35,17 @@ public final class SwaggerDemoApplication implements AutoCloseable {
     private DemoTokenIssuer issuer;
     private ConfigurableApplicationContext application;
 
+    /**
+     * Prepara o coordenador de recursos da demonstração.
+     */
     private SwaggerDemoApplication() { }
 
+    /**
+     * Inicia a demonstração em 8090 e aguarda encerramento, exibindo somente URLs públicas locais.
+     *
+     * @param args argumentos da linha de comando.
+     * @throws InterruptedException se a espera for interrompida.
+     */
     public static void main(String[] args) throws InterruptedException {
         var demo = start(8090);
         Runtime.getRuntime().addShutdownHook(new Thread(demo::close, "swagger-demo-shutdown"));
@@ -47,6 +59,12 @@ public final class SwaggerDemoApplication implements AutoCloseable {
         }
     }
 
+    /**
+     * Inicia banco, mock e emissor efêmeros, sobrepondo apenas propriedades desta execução.
+     *
+     * @param port porta local; zero solicita uma porta efêmera nos testes.
+     * @return ambiente pronto para chamadas autenticadas no Swagger.
+     */
     static SwaggerDemoApplication start(int port) {
         var demo = new SwaggerDemoApplication();
         try {
@@ -90,14 +108,28 @@ public final class SwaggerDemoApplication implements AutoCloseable {
         }
     }
 
+    /**
+     * Consulta a porta efetiva após o startup do servidor HTTP.
+     *
+     * @return porta da aplicação de demonstração.
+     */
     int port() {
         return ((ServletWebServerApplicationContext) application).getWebServer().getPort();
     }
 
+    /**
+     * Localiza a página de tokens e o JWK Set da execução atual.
+     *
+     * @return origem local do emissor efêmero.
+     */
     String issuerUrl() {
         return issuer.baseUrl();
     }
 
+    /**
+     * Encerra aplicação, mock, emissor e banco nessa ordem. Chamadas repetidas não recriam nem
+     * reencerram recursos já removidos.
+     */
     @Override
     public synchronized void close() {
         if (application != null) {
@@ -118,6 +150,11 @@ public final class SwaggerDemoApplication implements AutoCloseable {
         }
     }
 
+    /**
+     * Tenta encerrar um recurso sem impedir a limpeza dos demais em caso de falha.
+     *
+     * @param action operação de encerramento.
+     */
     private void closeResource(Runnable action) {
         try {
             action.run();

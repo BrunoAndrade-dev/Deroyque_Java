@@ -9,9 +9,18 @@ import org.springframework.test.context.DynamicPropertyRegistrar;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.*;
 
+/**
+ * Fornece JWK Set efêmero e cliente HTTP autenticado para testes de integração. Não participa da
+ * aplicação de produção.
+ */
 @TestConfiguration(proxyBeanMethods = false)
 public class TestSecurityConfiguration {
 
+    /**
+     * Publica apenas as chaves públicas efêmeras para o decoder real dos testes.
+     *
+     * @return servidor WireMock em porta aleatória, encerrado com o contexto.
+     */
     @Bean(destroyMethod = "stop")
     WireMockServer testJwkServer() {
         var server = new WireMockServer(0);
@@ -21,6 +30,12 @@ public class TestSecurityConfiguration {
         return server;
     }
 
+    /**
+     * Aponta a segurança do contexto de teste para metadados e chaves locais.
+     *
+     * @param testJwkServer servidor local de chaves públicas.
+     * @return registrador de propriedades dinâmicas de segurança.
+     */
     @Bean
     DynamicPropertyRegistrar testJwtProperties(WireMockServer testJwkServer) {
         return registry -> {
@@ -30,6 +45,11 @@ public class TestSecurityConfiguration {
         };
     }
 
+    /**
+     * Adiciona JWT válido somente às chamadas de teste para a API sem Authorization explícito.
+     *
+     * @return builder de cliente para testes; não altera a cadeia de segurança.
+     */
     @Bean
     RestTemplateBuilder authenticatedTestClientBuilder() {
         return new RestTemplateBuilder().additionalInterceptors((request, body, execution) -> {
