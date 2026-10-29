@@ -25,16 +25,33 @@ import java.net.http.HttpClient;
 import java.time.Clock;
 import java.time.Duration;
 
+/**
+ * Configura validação RS256, origem confiável das chaves e autorização stateless por escopos.
+ * Documentação habilitada e probes possuem leitura pública; pedidos continuam protegidos.
+ */
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties(SecurityProperties.class)
 public class SecurityConfiguration {
 
+    /**
+     * Configura acesso às chaves com timeout e sem seguir redirecionamentos.
+     *
+     * @return cliente HTTP exclusivo da validação JWT.
+     */
     @Bean
     HttpClient jwtHttpClient() {
         return HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2))
                 .followRedirects(HttpClient.Redirect.NEVER).build();
     }
 
+    /**
+     * Valida RS256, emissor, audiência e datas, normalizando falhas de obtenção de chaves para rejeição
+     * autenticada.
+     *
+     * @param properties configuração validada do componente.
+     * @param client cliente HTTP utilizado pelo componente.
+     * @return decoder baseado exclusivamente no JWK Set configurado.
+     */
     @Bean
     JwtDecoder jwtDecoder(SecurityProperties properties, @Qualifier("jwtHttpClient") HttpClient client) {
         var factory = new JdkClientHttpRequestFactory(client);
@@ -57,6 +74,15 @@ public class SecurityConfiguration {
         };
     }
 
+    /**
+     * Autoriza operações por escopo, limita Bearer ao header e desabilita sessão, Basic e formulário.
+     *
+     * @param http configurador de segurança HTTP.
+     * @param decoder validador de tokens JWT.
+     * @param errors handler sanitizado de autenticação e autorização.
+     * @return cadeia stateless com handlers sanitizados de 401 e 403.
+     * @throws Exception se a configuração ou execução do cenário falhar.
+     */
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http, JwtDecoder decoder,
                                            SecurityProblemHandler errors) throws Exception {

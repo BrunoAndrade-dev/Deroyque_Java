@@ -15,10 +15,20 @@ import java.time.Duration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
+/**
+ * Verifica o helper local e a execução autenticada com recursos temporários, incluindo retentativas,
+ * escopos e isolamento.
+ */
 @ExtendWith(OutputCaptureExtension.class)
 class SwaggerDemoTest {
     private final ObjectMapper mapper = new ObjectMapper();
 
+    /**
+     * Verifica helper, proteção de origem, rejeição de modos desconhecidos e ausência de material
+     * privado no JWK Set.
+     *
+     * @throws Exception se a configuração ou execução do cenário falhar.
+     */
     @Test
     void shouldKeepTokenHelperLocalAndRejectForeignOrigins() throws Exception {
         try (var issuer = new DemoTokenIssuer(() -> 8090); var client = HttpClient.newHttpClient()) {
@@ -49,6 +59,13 @@ class SwaggerDemoTest {
         }
     }
 
+    /**
+     * Verifica o fluxo autenticado completo com retry, idempotência, escopos e isolamento entre
+     * consumidores.
+     *
+     * @param output captura dos logs para verificar ausência de tokens.
+     * @throws Exception se a configuração ou execução do cenário falhar.
+     */
     @Test
     void shouldRunRealAuthenticatedAsyncFlowWithScopesAndIsolation(CapturedOutput output) throws Exception {
         try (var demo = SwaggerDemoApplication.start(0); var client = HttpClient.newHttpClient()) {
@@ -81,6 +98,15 @@ class SwaggerDemoTest {
         }
     }
 
+    /**
+     * Obtém uma credencial efêmera da origem local do teste sem imprimir o valor.
+     *
+     * @param client cliente HTTP utilizado pelo componente.
+     * @param issuerUrl origem local do emissor de teste.
+     * @param consumer opção de consumidor reconhecida pelo helper.
+     * @return JWT temporário.
+     * @throws Exception se a configuração ou execução do cenário falhar.
+     */
     private String token(HttpClient client, String issuerUrl, String consumer) throws Exception {
         var response = client.send(HttpRequest.newBuilder(URI.create(issuerUrl + "/token"))
                         .header("Origin", issuerUrl).POST(HttpRequest.BodyPublishers.ofString(consumer)).build(),
@@ -89,6 +115,18 @@ class SwaggerDemoTest {
         return response.body();
     }
 
+    /**
+     * Executa a chamada HTTP real com autorização opcional para verificar a segurança da demonstração.
+     *
+     * @param client cliente HTTP utilizado pelo componente.
+     * @param base origem HTTP da aplicação.
+     * @param method método HTTP da chamada.
+     * @param path caminho relativo do recurso.
+     * @param payload conteúdo vinculado à chave de idempotência.
+     * @param token JWT opcional enviado no header Authorization.
+     * @return resposta HTTP sem registrar o token enviado.
+     * @throws Exception se a configuração ou execução do cenário falhar.
+     */
     private HttpResponse<String> call(HttpClient client, String base, String method, String path,
                                       String payload, String token) throws Exception {
         var builder = HttpRequest.newBuilder(URI.create(base + path)).timeout(Duration.ofSeconds(10));

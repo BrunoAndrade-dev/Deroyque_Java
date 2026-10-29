@@ -13,6 +13,10 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 
+/**
+ * Executa reserva, conclusão e recuperação em transações próprias. O token da tentativa impede a
+ * aplicação de resultados antigos.
+ */
 @Component
 public class ProcessingTransactions {
 
@@ -20,12 +24,24 @@ public class ProcessingTransactions {
     private final ProcessingProperties properties;
     private final Clock clock;
 
+    /**
+     * Recebe persistência, política e relógio para coordenar tentativas duráveis.
+     *
+     * @param repository repositório de solicitações.
+     * @param properties configuração validada do componente.
+     * @param clock relógio utilizado na avaliação temporal.
+     */
     public ProcessingTransactions(ActivationRequestRepository repository, ProcessingProperties properties, Clock clock) {
         this.repository = repository;
         this.properties = properties;
         this.clock = clock;
     }
 
+    /**
+     * Reserva um pedido elegível em transação própria e devolve um snapshot da tentativa.
+     *
+     * @return trabalho reservado, ou vazio quando não há pedido elegível.
+     */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public Optional<WorkItem> claimNext() {
         Instant now = now();
@@ -35,6 +51,13 @@ public class ProcessingTransactions {
         });
     }
 
+    /**
+     * Confere estado e token sob lock antes de aplicar o resultado em transação própria.
+     *
+     * @param work snapshot da tentativa reservada.
+     * @param outcome resultado sanitizado da integração.
+     * @return true se o resultado foi aplicado; false para registro ausente ou tentativa antiga.
+     */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean finish(WorkItem work, ProviderOutcome outcome) {
         var found = repository.findForUpdate(work.id());
@@ -55,6 +78,11 @@ public class ProcessingTransactions {
         return true;
     }
 
+    /**
+     * Reagenda ou encerra tentativas que excederam o prazo, respeitando o orçamento já consumido.
+     *
+     * @return quantidade de tentativas reconciliadas neste ciclo.
+     */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public int recoverAbandoned() {
         Instant now = now();
@@ -65,12 +93,25 @@ public class ProcessingTransactions {
         return abandoned.size();
     }
 
+    /**
+     * Calcula backoff exponencial e respeita o maior prazo entre política local e Retry-After.
+     *
+     * @param request entidade da solicitação utilizada nesta operação.
+     * @param now instante da operação em UTC, não anterior à última alteração.
+     * @param retryAfter instante mínimo solicitado pelo provedor, ou null.
+     * @return instante mínimo para a próxima tentativa.
+     */
     private Instant retryAt(ActivationRequest request, Instant now, Instant retryAfter) {
         var backoff = properties.retryDelay().multipliedBy(1L << (request.getAttemptCount() - 1));
         Instant scheduled = now.plus(backoff);
         return retryAfter != null && retryAfter.isAfter(scheduled) ? retryAfter : scheduled;
     }
 
+    /**
+     * Obtém UTC com a precisão utilizada pelo PostgreSQL.
+     *
+     * @return instante truncado em microssegundos.
+     */
     private Instant now() {
         return clock.instant().truncatedTo(ChronoUnit.MICROS);
     }

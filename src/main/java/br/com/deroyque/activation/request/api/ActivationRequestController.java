@@ -27,6 +27,10 @@ import org.springframework.web.bind.annotation.RestController;
 import java.net.URI;
 import java.util.UUID;
 
+/**
+ * Expõe criação, consulta e paginação por DTOs. Autenticação e escopos são verificados pela cadeia de
+ * segurança; a propriedade dos pedidos é verificada pelo serviço.
+ */
 @RestController
 @RequestMapping("/api/v1/requests")
 @Tag(name = "Solicitações", description = "Registro, acompanhamento e consulta paginada de solicitações de ativação de produtos.")
@@ -44,10 +48,21 @@ public class ActivationRequestController {
 
     private final ActivationRequestService service;
 
+    /**
+     * Recebe o serviço responsável pelos casos de uso HTTP.
+     *
+     * @param service serviço de aplicação responsável pelos pedidos.
+     */
     public ActivationRequestController(ActivationRequestService service) {
         this.service = service;
     }
 
+    /**
+     * Converte a criação ou repetição em uma resposta pública, sem aguardar a ativação.
+     *
+     * @param input DTO normalizado e validado.
+     * @return 201 com Location para criação ou 200 para repetição idêntica.
+     */
     @PostMapping
     @Operation(summary = "Registrar solicitação de ativação", description = """
             Registra uma solicitação para processamento assíncrono. Requer o escopo `requests:write`.
@@ -81,6 +96,12 @@ public class ActivationRequestController {
                 : ResponseEntity.ok(response);
     }
 
+    /**
+     * Consulta um pedido visível ao consumidor autenticado.
+     *
+     * @param id UUID interno da solicitação.
+     * @return representação pública do estado atual.
+     */
     @GetMapping("/{id}")
     @Operation(summary = "Consultar solicitação por identificador", description = """
             Retorna a representação e o estado atual de uma solicitação pertencente ao consumidor
@@ -108,6 +129,15 @@ public class ActivationRequestController {
         return ActivationRequestResponse.from(service.get(id));
     }
 
+    /**
+     * Valida filtros e paginação antes de consultar pedidos do consumidor.
+     *
+     * @param status estado desejado, ou null para não filtrar.
+     * @param customerId identificador do cliente.
+     * @param page índice da página, iniciado em zero.
+     * @param size tamanho da página, de 1 a 100.
+     * @return página e totais restritos ao dono e aos filtros.
+     */
     @GetMapping
     @Operation(summary = "Listar solicitações com filtros e paginação", description = """
             Consulta exclusivamente as solicitações do consumidor autenticado. Requer o escopo

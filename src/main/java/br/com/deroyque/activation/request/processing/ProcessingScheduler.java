@@ -9,6 +9,10 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
+/**
+ * Agenda ciclos sequenciais de processamento e recuperação em threads separadas, com encerramento
+ * coordenado.
+ */
 @Configuration(proxyBeanMethods = false)
 @EnableScheduling
 @ConditionalOnProperty(prefix = "activation.processing", name = "enabled", havingValue = "true", matchIfMissing = true)
@@ -19,11 +23,22 @@ public class ProcessingScheduler {
     private final ActivationProcessor processor;
     private final ProcessingTransactions transactions;
 
+    /**
+     * Recebe os executores dos ciclos de processamento e recuperação.
+     *
+     * @param processor executor das tentativas.
+     * @param transactions operações transacionais do processador.
+     */
     public ProcessingScheduler(ActivationProcessor processor, ProcessingTransactions transactions) {
         this.processor = processor;
         this.transactions = transactions;
     }
 
+    /**
+     * Separa processamento e recuperação e concede prazo para concluir tarefas no desligamento.
+     *
+     * @return agendador com duas threads e espera de encerramento de 10 segundos.
+     */
     @Bean
     ThreadPoolTaskScheduler taskScheduler() {
         var scheduler = new ThreadPoolTaskScheduler();
@@ -34,6 +49,10 @@ public class ProcessingScheduler {
         return scheduler;
     }
 
+    /**
+     * Processa até dez pedidos sequencialmente; cada reserva ocorre imediatamente antes da chamada
+     * remota.
+     */
     @Scheduled(fixedDelayString = "${activation.processing.poll-interval:1s}")
     public void processPending() {
         try {
@@ -47,6 +66,9 @@ public class ProcessingScheduler {
         }
     }
 
+    /**
+     * Reconcilia tentativas abandonadas e registra somente a quantidade recuperada ou o tipo da falha.
+     */
     @Scheduled(fixedDelayString = "${activation.processing.recovery-interval:5s}")
     public void recover() {
         try {

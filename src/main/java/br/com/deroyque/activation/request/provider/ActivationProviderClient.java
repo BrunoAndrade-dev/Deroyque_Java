@@ -18,6 +18,10 @@ import java.time.Instant;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 
+/**
+ * Envia a ativação com chave de idempotência, correlação e credencial própria do provedor. Classifica
+ * apenas status e headers, sem armazenar o corpo recebido.
+ */
 @Component
 public class ActivationProviderClient {
 
@@ -27,6 +31,15 @@ public class ActivationProviderClient {
     private final Clock clock;
     private final ProviderCredentials credentials;
 
+    /**
+     * Recebe o cliente HTTP, JSON, timeouts, relógio e credencial do provedor.
+     *
+     * @param client cliente HTTP utilizado pelo componente.
+     * @param mapper serializador JSON configurado.
+     * @param properties configuração validada do componente.
+     * @param clock relógio utilizado na avaliação temporal.
+     * @param credentials leitor de credencial externa do provedor.
+     */
     public ActivationProviderClient(@Qualifier("providerHttpClient") HttpClient client, ObjectMapper mapper,
                                     ProviderProperties properties, Clock clock, ProviderCredentials credentials) {
         this.client = client;
@@ -36,6 +49,14 @@ public class ActivationProviderClient {
         this.credentials = credentials;
     }
 
+    /**
+     * Envia uma tentativa e classifica o resultado sem reter o corpo da resposta. Falhas de credencial
+     * impedem o envio HTTP.
+     *
+     * @param work snapshot da tentativa reservada.
+     * @return sucesso, falha permanente ou falha elegível a retry com código sanitizado.
+     * @throws IllegalStateException se o payload não puder ser serializado.
+     */
     public ProviderOutcome activate(WorkItem work) {
         String json;
         try {
@@ -81,6 +102,13 @@ public class ActivationProviderClient {
         }
     }
 
+    /**
+     * Interpreta segundos não negativos ou data HTTP; valores inválidos e fora do intervalo são
+     * ignorados.
+     *
+     * @param value header Retry-After recebido, ou null.
+     * @return instante informado pelo provedor, ou null se inválido/ausente.
+     */
     private Instant parseRetryAfter(String value) {
         if (value == null) {
             return null;
@@ -99,6 +127,13 @@ public class ActivationProviderClient {
         }
     }
 
+    /**
+     * Dados de negócio enviados ao provedor; não inclui proprietário interno nem token do consumidor.
+     *
+     * @param externalId identificador do pedido na origem.
+     * @param customerId cliente da ativação.
+     * @param productCode produto solicitado.
+     */
     private record ActivationPayload(String externalId, String customerId, String productCode) {
     }
 }

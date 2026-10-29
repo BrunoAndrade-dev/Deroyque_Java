@@ -12,7 +12,10 @@ import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.function.IntSupplier;
 
-/** Loopback-only token helper. Never included in the production application. */
+/**
+ * Emissor efêmero da demonstração manual, restrito a loopback e ausente do artefato de produção. Tokens
+ * são entregues somente à página local, sem logs ou persistência.
+ */
 final class DemoTokenIssuer implements AutoCloseable {
     private static final Map<String, Consumer> CONSUMERS = Map.of(
             "a-full", new Consumer("demo-consumer-a", "requests:read requests:write"),
@@ -23,16 +26,34 @@ final class DemoTokenIssuer implements AutoCloseable {
     private final RSAKey key = TestTokens.newKey();
     private final HttpServer server;
 
+    /**
+     * Cria o helper vinculado ao loopback com chave privada efêmera apenas em memória.
+     *
+     * @param applicationPort fornecedor da porta efetiva da aplicação.
+     * @throws IOException se o servidor local não puder ser criado.
+     */
     DemoTokenIssuer(IntSupplier applicationPort) throws IOException {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", exchange -> handle(exchange, applicationPort));
         server.start();
     }
 
+    /**
+     * Informa a origem local exata usada pelo helper e pela validação de Origin.
+     *
+     * @return URL HTTP em 127.0.0.1 com porta efêmera.
+     */
     String baseUrl() {
         return "http://127.0.0.1:" + server.getAddress().getPort();
     }
 
+    /**
+     * Serve a página, as chaves públicas e a emissão, restringindo Host e desabilitando cache.
+     *
+     * @param exchange chamada recebida pelo servidor local.
+     * @param applicationPort fornecedor da porta efetiva da aplicação.
+     * @throws IOException se não for possível ler ou escrever a resposta HTTP.
+     */
     private void handle(HttpExchange exchange, IntSupplier applicationPort) throws IOException {
         try (exchange) {
             var headers = exchange.getResponseHeaders();
@@ -60,6 +81,12 @@ final class DemoTokenIssuer implements AutoCloseable {
         }
     }
 
+    /**
+     * Emite apenas para consumidores pré-definidos após validar POST, Origin e tamanho da entrada.
+     *
+     * @param exchange chamada recebida pelo servidor local.
+     * @throws IOException se não for possível ler ou escrever a resposta HTTP.
+     */
     private void issue(HttpExchange exchange) throws IOException {
         if (!"POST".equals(exchange.getRequestMethod())) {
             exchange.getResponseHeaders().set("Allow", "POST");
@@ -82,6 +109,15 @@ final class DemoTokenIssuer implements AutoCloseable {
         send(exchange, 200, "text/plain", token);
     }
 
+    /**
+     * Envia a representação HTTP com charset UTF-8 sem registrar o corpo.
+     *
+     * @param exchange chamada recebida pelo servidor local.
+     * @param status estado desejado, ou null para não filtrar.
+     * @param type tipo de conteúdo da representação.
+     * @param body corpo recebido ou representação a enviar.
+     * @throws IOException se não for possível ler ou escrever a resposta HTTP.
+     */
     private void send(HttpExchange exchange, int status, String type, String body) throws IOException {
         byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
         exchange.getResponseHeaders().set("Content-Type", type + "; charset=utf-8");
@@ -89,6 +125,12 @@ final class DemoTokenIssuer implements AutoCloseable {
         exchange.getResponseBody().write(bytes);
     }
 
+    /**
+     * Renderiza os controles locais de geração e cópia sem persistência de tokens no navegador.
+     *
+     * @param port porta local; zero solicita uma porta efêmera nos testes.
+     * @return HTML do helper com link para o Swagger desta execução.
+     */
     private String page(int port) {
         return """
                 <!doctype html><html lang="pt-BR"><meta charset="utf-8">
@@ -141,10 +183,19 @@ final class DemoTokenIssuer implements AutoCloseable {
                 """.formatted(port);
     }
 
+    /**
+     * Interrompe o servidor local de emissão e chaves públicas.
+     */
     @Override
     public void close() {
         server.stop(0);
     }
 
+    /**
+     * Identidade e escopos permitidos pelo emissor efêmero de demonstração.
+     *
+     * @param subject identificador estável do consumidor de demonstração.
+     * @param scope escopos autorizados na emissão.
+     */
     private record Consumer(String subject, String scope) { }
 }
