@@ -18,10 +18,19 @@ public class OpenApiConfiguration {
     OpenAPI activationOpenApi() {
         return new OpenAPI()
                 .info(new Info().title("Deroyque — Solicitações de ativação").version("v1")
-                        .description("API de ativação assíncrona. Uma criação retorna PENDING; consulte o pedido "
-                                + "para acompanhar o resultado. Requer JWT de um emissor externo: requests:write "
-                                + "para criar e requests:read para consultar. Cada consumidor acessa somente seus pedidos. "
-                                + "O Swagger não emite tokens; sem emissor configurado, chamadas protegidas retornam 401."))
+                        .description("""
+                                API REST para registrar e acompanhar solicitações de ativação de produtos.
+                                O processamento é assíncrono: a criação confirma a persistência da solicitação;
+                                o resultado da ativação deve ser acompanhado pelo endpoint de consulta.
+
+                                **Autenticação:** access token JWT no header `Authorization: Bearer <token>`.
+                                O escopo `requests:write` autoriza a criação; `requests:read` autoriza consultas.
+                                Os registros são isolados por consumidor. Identificadores internos utilizam UUID
+                                e datas são representadas em UTC no formato ISO-8601.
+
+                                Use **Authorize** para informar um token válido. A documentação não emite tokens;
+                                na demonstração local, utilize a página auxiliar de tokens temporários.
+                                """))
                 .servers(List.of(new Server().url("/")))
                 .components(new Components().addSecuritySchemes("bearerAuth", new SecurityScheme()
                         .type(SecurityScheme.Type.HTTP).scheme("bearer").bearerFormat("JWT")

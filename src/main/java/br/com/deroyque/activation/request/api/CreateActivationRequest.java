@@ -5,10 +5,12 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
 public record CreateActivationRequest(
-        @Schema(description = "Identificador globalmente único; espaços nas extremidades são removidos", example = "EXT-12345")
+        @Schema(description = "Identificador do pedido no sistema de origem, globalmente único. Utilizado para reconhecer repetições da mesma solicitação.", example = "EXT-12345")
         @NotBlank @Size(min = 1, max = 100) String externalId,
-        @Schema(example = "CUST-10001") @NotBlank @Size(min = 1, max = 100) String customerId,
-        @Schema(example = "INTERNET-500") @NotBlank @Size(min = 1, max = 100) String productCode) {
+        @Schema(description = "Identificador do cliente para o qual o produto será ativado.", example = "CUST-10001")
+        @NotBlank @Size(min = 1, max = 100) String customerId,
+        @Schema(description = "Código do produto a ser enviado ao provedor de ativação.", example = "INTERNET-500")
+        @NotBlank @Size(min = 1, max = 100) String productCode) {
 
     public CreateActivationRequest {
         externalId = strip(externalId);

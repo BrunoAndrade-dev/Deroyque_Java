@@ -2,12 +2,19 @@ package br.com.deroyque.activation.request.api;
 
 import br.com.deroyque.activation.request.domain.ActivationRequest;
 import br.com.deroyque.activation.request.domain.RequestStatus;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.Instant;
 import java.util.UUID;
 
-public record ActivationRequestResponse(UUID id, String externalId, String customerId, String productCode,
-                                        RequestStatus status, Instant createdAt, Instant updatedAt) {
+public record ActivationRequestResponse(
+        @Schema(description = "UUID interno utilizado na consulta por identificador.") UUID id,
+        @Schema(description = "Identificador único do pedido no sistema de origem.") String externalId,
+        @Schema(description = "Identificador do cliente associado à solicitação.") String customerId,
+        @Schema(description = "Código do produto solicitado para ativação.") String productCode,
+        @Schema(description = "Estado atual: PENDING, PROCESSING, COMPLETED ou FAILED.") RequestStatus status,
+        @Schema(description = "Data de criação em UTC, no formato ISO-8601. Permanece imutável.") Instant createdAt,
+        @Schema(description = "Data da última atualização em UTC, no formato ISO-8601.") Instant updatedAt) {
 
     public static ActivationRequestResponse from(ActivationRequest request) {
         return new ActivationRequestResponse(request.getId(), request.getExternalId(), request.getCustomerId(),

@@ -93,14 +93,14 @@ final class DemoTokenIssuer implements AutoCloseable {
         return """
                 <!doctype html><html lang="pt-BR"><meta charset="utf-8">
                 <meta name="viewport" content="width=device-width,initial-scale=1">
-                <title>Demonstração local — Deroyque</title>
+                <title>Token de acesso — Deroyque</title>
                 <style>body{font:18px system-ui;max-width:760px;margin:48px auto;padding:0 24px}
                 button,select,textarea{font:inherit;margin:8px 0;padding:10px}textarea{width:95%%}
                 button{cursor:pointer}p{line-height:1.6}</style>
-                <h1>Tokens temporários de demonstração</h1>
-                <p>Escolha o consumidor, gere o token e copie somente seu valor para
-                <strong>Authorize</strong> no <a href="http://127.0.0.1:%d/swagger-ui.html"
-                target="_blank" rel="noopener noreferrer">Swagger desta demonstração</a>.</p>
+                <h1>Token de acesso</h1>
+                <p>Gere um token temporário para autenticar chamadas no Swagger.</p>
+                <a href="http://127.0.0.1:%d/swagger-ui.html"
+                target="_blank" rel="noopener noreferrer">Abrir Swagger</a><br><br>
                 <label for="consumer">Consumidor e permissões</label><br>
                 <select id="consumer">
                   <option value="a-full">Consumidor A — leitura e escrita</option>
@@ -113,9 +113,6 @@ final class DemoTokenIssuer implements AutoCloseable {
                 <label for="token">Token de teste (válido por 5 minutos)</label><br>
                 <textarea id="token" rows="5" readonly autocomplete="off" spellcheck="false"></textarea>
                 <p id="message" role="status" aria-live="polite"></p>
-                <p>A API mantém as mesmas regras de JWT, escopos e isolamento.
-                Os dados pertencem a um banco temporário e são apagados ao encerrar.
-                Não use dados reais nem compartilhe o token. Recarregar esta página limpa o campo.</p>
                 <script>
                 const token = document.getElementById('token');
                 const message = document.getElementById('message');
@@ -131,12 +128,12 @@ final class DemoTokenIssuer implements AutoCloseable {
                       body: document.getElementById('consumer').value});
                     if (!response.ok) throw new Error();
                     token.value = await response.text(); copy.disabled = false;
-                    message.textContent = 'Token gerado. Copie para Authorize, sem o prefixo Bearer.';
+                    message.textContent = 'Token gerado.';
                   } catch { message.textContent = 'Não foi possível gerar o token. Tente novamente.'; }
                 };
                 copy.onclick = async () => {
                   try { await navigator.clipboard.writeText(token.value);
-                    message.textContent = 'Token copiado. Cole em Authorize no Swagger.';
+                    message.textContent = 'Token copiado.';
                   } catch { token.focus(); token.select();
                     message.textContent = 'Copie o texto selecionado com Ctrl+C.'; }
                 };
