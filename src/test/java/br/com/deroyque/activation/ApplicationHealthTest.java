@@ -1,13 +1,15 @@
 package br.com.deroyque.activation;
 
 import br.com.deroyque.activation.support.PostgresTestConfiguration;
+
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
-import org.springframework.http.HttpStatus;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpStatus;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -25,5 +27,13 @@ class ApplicationHealthTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isEqualTo("{\"status\":\"UP\"}");
+    }
+
+    @Test
+    void shouldDisableApiDocumentationByDefault() {
+        assertThat(client.getForEntity("/v3/api-docs", String.class).getStatusCode())
+                .isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(client.getForEntity("/swagger-ui/index.html", String.class).getStatusCode())
+                .isEqualTo(HttpStatus.NOT_FOUND);
     }
 }

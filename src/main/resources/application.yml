@@ -51,6 +51,18 @@ activation:
     poll-interval: ${PROCESSING_POLL_INTERVAL:1s}
     recovery-interval: ${PROCESSING_RECOVERY_INTERVAL:5s}
 
+springdoc:
+  api-docs:
+    enabled: ${SWAGGER_ENABLED:false}
+  packages-to-scan: br.com.deroyque.activation.request.api
+  swagger-ui:
+    enabled: ${SWAGGER_ENABLED:false}
+    path: /swagger-ui.html
+    persist-authorization: false
+    query-config-enabled: false
+    disable-swagger-default-url: true
+    validator-url: ""
+
 management:
   endpoints:
     web:

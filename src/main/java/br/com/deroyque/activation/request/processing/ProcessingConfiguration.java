@@ -1,7 +1,8 @@
 package br.com.deroyque.activation.request.processing;
 
-import br.com.deroyque.activation.request.provider.ProviderProperties;
 import br.com.deroyque.activation.request.provider.ProviderCredentialProperties;
+import br.com.deroyque.activation.request.provider.ProviderProperties;
+
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

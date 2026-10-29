@@ -2,10 +2,11 @@ package br.com.deroyque.activation.request.application;
 
 import br.com.deroyque.activation.request.domain.ActivationRequest;
 import br.com.deroyque.activation.request.persistence.ActivationRequestRepository;
-import org.hibernate.exception.ConstraintViolationException;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.BeforeEach;
 import br.com.deroyque.activation.security.CurrentConsumer;
+
+import org.hibernate.exception.ConstraintViolationException;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -43,7 +44,7 @@ class ActivationRequestServiceTest {
     @Test
     void shouldReadWinningInsertAfterUniqueConstraintFailure() {
         var winner = ActivationRequest.create("EXT", "CUSTOMER", "PRODUCT", Instant.now(), "a".repeat(64));
-        when(repository.findByExternalId("EXT")).thenReturn(Optional.empty(), Optional.of(winner));
+        when(repository.findByExternalId("EXT")).thenReturn(Optional.empty()).thenReturn(Optional.of(winner));
         when(creationTransaction.insert("EXT", "CUSTOMER", "PRODUCT", "a".repeat(64)))
                 .thenThrow(violation("uk_activation_requests_external_id"));
 
@@ -56,7 +57,7 @@ class ActivationRequestServiceTest {
     @Test
     void shouldRejectDifferentContentAfterConcurrentInsertWins() {
         var winner = ActivationRequest.create("EXT", "OTHER-CUSTOMER", "PRODUCT", Instant.now(), "a".repeat(64));
-        when(repository.findByExternalId("EXT")).thenReturn(Optional.empty(), Optional.of(winner));
+        when(repository.findByExternalId("EXT")).thenReturn(Optional.empty()).thenReturn(Optional.of(winner));
         when(creationTransaction.insert("EXT", "CUSTOMER", "PRODUCT", "a".repeat(64)))
                 .thenThrow(violation("uk_activation_requests_external_id"));
 

@@ -45,6 +45,7 @@ services:
       SECURITY_ISSUER_URI: ${SECURITY_ISSUER_URI:?Configure SECURITY_ISSUER_URI}
       SECURITY_JWK_SET_URI: ${SECURITY_JWK_SET_URI:?Configure SECURITY_JWK_SET_URI}
       SECURITY_AUDIENCE: ${SECURITY_AUDIENCE:?Configure SECURITY_AUDIENCE}
+      SWAGGER_ENABLED: ${SWAGGER_ENABLED:-true}
     secrets:
       - source: db_password
         target: spring.datasource.password
