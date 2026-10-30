@@ -4,7 +4,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 
-/** Small probe for JRE images, avoiding an extra curl/OS package dependency. */
+/** Verifica a saúde em imagens JRE sem exigir curl ou outro pacote do sistema operacional. */
 public final class Healthcheck {
     /**
      * Consulta o endpoint informado e encerra com código 0 apenas para HTTP 200; erros e demais status resultam em código 1.

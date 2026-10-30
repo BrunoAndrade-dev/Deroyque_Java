@@ -6,7 +6,7 @@
 !docker/Healthcheck.java
 !mock-provider/
 !mock-provider/**
-# Keep credentials out even if accidentally placed under an allowed directory.
+# Exclui credenciais mesmo quando colocadas por engano em um diretório permitido.
 **/.env*
 **/secrets/**
 **/*.key

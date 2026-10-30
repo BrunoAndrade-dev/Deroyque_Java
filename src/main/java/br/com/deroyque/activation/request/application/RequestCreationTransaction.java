@@ -45,7 +45,6 @@ public class RequestCreationTransaction {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public ActivationRequest insert(String externalId, String customerId, String productCode, String ownerId) {
-        // Match PostgreSQL timestamp precision so first creation and retries expose the same dates.
         Instant now = clock.instant().truncatedTo(ChronoUnit.MICROS);
         String correlationId = MDC.get("traceId");
         if (correlationId == null) {

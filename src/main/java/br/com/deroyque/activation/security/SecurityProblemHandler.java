@@ -85,7 +85,7 @@ public class SecurityProblemHandler implements AuthenticationEntryPoint, AccessD
         response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
         response.setHeader(HttpHeaders.CACHE_CONTROL, "no-store");
         response.setHeader(HttpHeaders.PRAGMA, "no-cache");
-        // Authentication exception messages may contain parser details. Never serialize or log them.
+        // Exceções de autenticação podem conter detalhes internos; não as serialize nem registre.
         mapper.writeValue(response.getOutputStream(), problem);
     }
 }

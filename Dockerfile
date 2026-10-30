@@ -4,8 +4,8 @@ WORKDIR /workspace
 COPY pom.xml ./
 COPY src ./src
 COPY docker/Healthcheck.java /healthcheck/Healthcheck.java
-# Optional build secrets support corporate/cloud proxies without storing their
-# settings or CA in an image layer. The temporary trust store lives in tmpfs.
+# Segredos opcionais permitem usar proxy sem gravar configurações ou CA nas camadas.
+# O armazenamento temporário de certificados fica em tmpfs.
 RUN --mount=type=secret,id=proxy_ca \
     --mount=type=secret,id=maven_settings \
     --mount=type=tmpfs,target=/build-trust \

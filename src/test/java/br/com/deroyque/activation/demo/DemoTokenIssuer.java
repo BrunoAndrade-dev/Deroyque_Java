@@ -113,9 +113,9 @@ final class DemoTokenIssuer implements AutoCloseable {
      * Envia a representação HTTP com charset UTF-8 sem registrar o corpo.
      *
      * @param exchange chamada recebida pelo servidor local.
-     * @param status estado desejado, ou null para não filtrar.
+     * @param status código HTTP enviado na resposta.
      * @param type tipo de conteúdo da representação.
-     * @param body corpo recebido ou representação a enviar.
+     * @param body conteúdo textual enviado na resposta.
      * @throws IOException se não for possível ler ou escrever a resposta HTTP.
      */
     private void send(HttpExchange exchange, int status, String type, String body) throws IOException {
@@ -128,7 +128,7 @@ final class DemoTokenIssuer implements AutoCloseable {
     /**
      * Renderiza os controles locais de geração e cópia sem persistência de tokens no navegador.
      *
-     * @param port porta local; zero solicita uma porta efêmera nos testes.
+     * @param port porta efetiva da aplicação, utilizada no link para o Swagger.
      * @return HTML do helper com link para o Swagger desta execução.
      */
     private String page(int port) {

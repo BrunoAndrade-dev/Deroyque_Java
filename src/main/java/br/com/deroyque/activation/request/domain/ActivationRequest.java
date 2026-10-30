@@ -73,7 +73,6 @@ public class ActivationRequest {
      * Construtor protegido exigido pelo JPA para reconstituição da entidade.
      */
     protected ActivationRequest() {
-        // Required by JPA.
     }
 
     /**
@@ -107,8 +106,7 @@ public class ActivationRequest {
     }
 
     /**
-     * Cria um agregado PENDING com identificadores normalizados e metadados imutáveis. A sobrecarga
-     * curta gera a correlação.
+     * Cria um agregado PENDING com identificadores normalizados e uma correlação UUID gerada.
      *
      * @param externalId identificador global normalizado do pedido.
      * @param customerId identificador do cliente.
@@ -123,8 +121,7 @@ public class ActivationRequest {
     }
 
     /**
-     * Cria um agregado PENDING com identificadores normalizados e metadados imutáveis. A sobrecarga
-     * curta gera a correlação.
+     * Cria um agregado PENDING com identificadores normalizados e a correlação fornecida.
      *
      * @param externalId identificador global normalizado do pedido.
      * @param customerId identificador do cliente.
@@ -141,12 +138,12 @@ public class ActivationRequest {
 
     /**
      * Reserva uma tentativa de um pedido PENDING já elegível, incrementando o contador e criando um
-     * token novo.
+     * token novo. O processador verifica o orçamento de tentativas antes da reserva.
      *
      * @param now instante de criação ou transição em UTC; transições não podem retroceder no tempo.
      * @throws IllegalStateException se o estado de origem não permitir a transição.
-     * @throws IllegalArgumentException se os valores temporais, o código de erro ou a política
-     *     aplicáveis à operação forem inválidos.
+     * @throws IllegalArgumentException se a tentativa ainda não estiver disponível ou o instante
+     *     anteceder a última atualização.
      */
     public void startProcessing(Instant now) {
         Objects.requireNonNull(now, "now is required");
@@ -165,8 +162,7 @@ public class ActivationRequest {
      *
      * @param now instante de criação ou transição em UTC; transições não podem retroceder no tempo.
      * @throws IllegalStateException se o estado de origem não permitir a transição.
-     * @throws IllegalArgumentException se os valores temporais, o código de erro ou a política
-     *     aplicáveis à operação forem inválidos.
+     * @throws IllegalArgumentException se o instante anteceder a última atualização.
      */
     public void complete(Instant now) {
         transition(RequestStatus.PROCESSING, RequestStatus.COMPLETED, now);
@@ -179,8 +175,7 @@ public class ActivationRequest {
      *
      * @param now instante de criação ou transição em UTC; transições não podem retroceder no tempo.
      * @throws IllegalStateException se o estado de origem não permitir a transição.
-     * @throws IllegalArgumentException se os valores temporais, o código de erro ou a política
-     *     aplicáveis à operação forem inválidos.
+     * @throws IllegalArgumentException se o instante anteceder a última atualização.
      */
     public void fail(Instant now) {
         fail("PERMANENT_FAILURE", now);
@@ -192,8 +187,8 @@ public class ActivationRequest {
      * @param errorCode código sanitizado da falha.
      * @param now instante de criação ou transição em UTC; transições não podem retroceder no tempo.
      * @throws IllegalStateException se o estado de origem não permitir a transição.
-     * @throws IllegalArgumentException se os valores temporais, o código de erro ou a política
-     *     aplicáveis à operação forem inválidos.
+     * @throws IllegalArgumentException se o código de erro for inválido ou o instante anteceder
+     *     a última atualização.
      */
     public void fail(String errorCode, Instant now) {
         String safeCode = validateErrorCode(errorCode);
@@ -210,8 +205,8 @@ public class ActivationRequest {
      * @param maxAttempts total permitido de tentativas.
      * @param now instante de criação ou transição em UTC; transições não podem retroceder no tempo.
      * @throws IllegalStateException se o estado de origem não permitir a transição.
-     * @throws IllegalArgumentException se os valores temporais, o código de erro ou a política
-     *     aplicáveis à operação forem inválidos.
+     * @throws IllegalArgumentException se o código de erro ou a política de retry forem inválidos,
+     *     ou se o instante anteceder a última atualização.
      */
     public void retryOrFail(String errorCode, Instant retryAt, int maxAttempts, Instant now) {
         String safeCode = validateErrorCode(errorCode);
@@ -228,7 +223,7 @@ public class ActivationRequest {
     }
 
     /**
-     * Remove a reserva e o agendamento anteriores antes de definir o próximo estado.
+     * Limpa os metadados da tentativa e o agendamento; o estado é definido pelo chamador.
      */
     private void clearProcessing() {
         processingStartedAt = null;
@@ -257,8 +252,7 @@ public class ActivationRequest {
      * @param next estado de destino.
      * @param now instante de criação ou transição em UTC; transições não podem retroceder no tempo.
      * @throws IllegalStateException se o estado de origem não permitir a transição.
-     * @throws IllegalArgumentException se os valores temporais, o código de erro ou a política
-     *     aplicáveis à operação forem inválidos.
+     * @throws IllegalArgumentException se o instante anteceder a última atualização.
      */
     private void transition(RequestStatus expected, RequestStatus next, Instant now) {
         Objects.requireNonNull(now, "now is required");

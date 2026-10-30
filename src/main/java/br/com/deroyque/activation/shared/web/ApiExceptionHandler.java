@@ -78,7 +78,7 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
      */
     @ExceptionHandler(Exception.class)
     ResponseEntity<Object> unexpected(Exception exception, WebRequest request) {
-        // Log the exception type and correlation ID without exposing SQL, payloads or credentials.
+        // Registra tipo e correlação da falha sem expor SQL, conteúdo ou credenciais.
         log.error("Unexpected failure: type={}, traceId={}", exception.getClass().getSimpleName(),
                 request.getAttribute(CorrelationIdFilter.ATTRIBUTE, RequestAttributes.SCOPE_REQUEST));
         return response(HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected error occurred.",

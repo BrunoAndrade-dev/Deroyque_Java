@@ -79,7 +79,7 @@ public class ActivationProviderClient {
         var request = builder.build();
         try {
             var response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
-            // Only status and headers are needed; close without consuming or retaining provider payloads.
+            // Apenas status e headers são necessários; fecha o corpo sem consumir ou reter seu conteúdo.
             try (var ignored = response.body()) {
                 int status = response.statusCode();
                 if (status >= 200 && status < 300) {

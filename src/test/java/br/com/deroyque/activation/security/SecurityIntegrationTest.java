@@ -380,7 +380,7 @@ class SecurityIntegrationTest {
     }
 
     private void assertNoToken(ResponseEntity<String> response, String token, CapturedOutput output) {
-        // Boolean assertions avoid printing the token itself if a check fails.
+        // Asserções booleanas evitam imprimir o token quando uma verificação falha.
         assertThat(response.getBody().contains(token)).isFalse();
         assertThat(response.getHeaders().toString().contains(token)).isFalse();
         assertThat(output.getAll().contains(token)).isFalse();
