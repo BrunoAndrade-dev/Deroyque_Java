@@ -45,8 +45,8 @@ public class SecurityConfiguration {
     }
 
     /**
-     * Valida RS256, emissor, audiência e datas, normalizando falhas de obtenção de chaves para rejeição
-     * autenticada.
+     * Valida RS256, emissor, audiência e datas, convertendo falhas de obtenção de chaves em rejeição
+     * de autenticação com resposta 401.
      *
      * @param properties configuração validada do componente.
      * @param client cliente HTTP utilizado pelo componente.
@@ -66,9 +66,9 @@ public class SecurityConfiguration {
             try {
                 return decoder.decode(token);
             } catch (JwtException exception) {
-                // Key retrieval failures must also follow the sanitized 401 path.
-                // A generic JwtException becomes AuthenticationServiceException
-                // in JwtAuthenticationProvider and can otherwise escape as 500.
+                // Falhas na obtenção de chaves também devem retornar 401 com mensagem sanitizada.
+                // No JwtAuthenticationProvider, uma JwtException genérica é convertida em
+                // AuthenticationServiceException e poderia resultar em 500.
                 throw new BadJwtException("Unable to validate access token.");
             }
         };
@@ -81,7 +81,7 @@ public class SecurityConfiguration {
      * @param decoder validador de tokens JWT.
      * @param errors handler sanitizado de autenticação e autorização.
      * @return cadeia stateless com handlers sanitizados de 401 e 403.
-     * @throws Exception se a configuração ou execução do cenário falhar.
+     * @throws Exception se a construção da cadeia de segurança falhar.
      */
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http, JwtDecoder decoder,

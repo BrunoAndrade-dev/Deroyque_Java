@@ -41,7 +41,7 @@ public class CurrentConsumer {
      */
     public static String identity(String issuer, String subject) {
         try {
-            // Delimiter prevents ambiguous concatenation; only validated issuer/subject are used at runtime.
+            // O delimitador evita concatenações ambíguas; emissor e subject já foram validados.
             byte[] input = (issuer + "\u0000" + subject).getBytes(StandardCharsets.UTF_8);
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(input));
         } catch (NoSuchAlgorithmException exception) {

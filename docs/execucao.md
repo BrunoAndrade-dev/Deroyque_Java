@@ -2,39 +2,30 @@
 
 ## 1. Onde executar os comandos
 
-Você pode trabalhar pelo navegador. Os comandos são digitados no terminal do
-ambiente de desenvolvimento na nuvem, na máquina em que o repositório e o Docker
-estão disponíveis. Não é necessário ter o aplicativo desktop do Codex.
+Execute os comandos no terminal da máquina em que o repositório e o Docker
+estão disponíveis, seja no terminal do sistema ou no terminal integrado do IntelliJ.
 
-O terminal do seu computador e o terminal da nuvem são máquinas diferentes.
-`localhost` sempre aponta para a máquina em que o comando está sendo executado.
-Portanto, para este tutorial, execute também o `curl` no terminal da nuvem.
-Abrir `localhost:8080` no navegador do seu computador não acessa automaticamente
-a aplicação da nuvem. Caso a interface ofereça encaminhamento de portas, use
-acesso privado; este tutorial não exige publicar a API na internet.
+`localhost` aponta para a máquina em que o comando ou navegador está sendo
+executado. Se a aplicação estiver em uma máquina remota, o acesso pelo navegador
+local exige encaminhamento privado de portas ou uma configuração de rede adequada.
 
-Na sessão atual, o projeto está em:
-
-```bash
-cd /workspace/Deroyque_Java
-pwd
-git status --short --branch
-```
-
-`pwd` deve mostrar a pasta do projeto. `git status` permite conferir a branch e
-as alterações locais. Trabalhamos na `develop`. Os comandos deste tutorial não
-criam commits, não fazem push e não abrem pull requests.
-
-Para um clone novo, quando as alterações desta etapa já estiverem publicadas:
+Para obter o projeto:
 
 ```bash
 git clone --branch develop https://github.com/BrunoAndrade-dev/Deroyque_Java.git
 cd Deroyque_Java
 ```
 
-O clone recebe somente o conteúdo publicado no GitHub. Arquivos locais ainda
-sem commit/push não aparecerão em outra máquina. Não clone novamente dentro de
-um checkout existente para acompanhar este tutorial.
+Se já tiver o repositório, abra sua pasta existente. Na raiz, confira:
+
+```bash
+pwd
+git status --short --branch
+```
+
+`pwd` mostra a pasta atual. `git status` permite conferir a branch e as alterações
+locais. Os exemplos usam a branch `develop`. Não clone novamente dentro de um
+checkout existente.
 
 ## 2. O que já pode ser executado sem um emissor OAuth real
 
@@ -43,18 +34,23 @@ emissor simulado **somente nos testes**. Por isso:
 
 - Os testes completos podem ser executados agora, sem tokens ou credenciais reais.
 - As imagens Docker podem ser construídas sem um emissor.
-- Para chamar os endpoints de negócio manualmente com autenticação, será
-  necessário configurar um emissor externo e obter um token válido.
+- Para chamar os endpoints de negócio manualmente pelo Compose com autenticação,
+  será necessário configurar um emissor externo e obter um token válido.
+- Para experimentar chamadas autenticadas sem emissor real, use a
+  [demonstração pelo Swagger](demo-swagger.md). Ela inicia um emissor efêmero
+  exclusivo de `src/test` e recursos temporários separados, mantendo a validação
+  de JWT, as permissões e o isolamento por consumidor.
 
-O projeto não possui endpoint de login nem gera tokens para uso manual.
+O JAR de produção não possui endpoint de login nem emite tokens. O helper de
+emissão existe somente na demonstração de teste, fora desse artefato.
 Não substitua os metadados por endereços inventados para considerar a segurança
 validada. Uma aplicação com health `UP` não comprova que um emissor está acessível
 ou que um JWT será aceito: a obtenção das chaves ocorre quando necessária.
 
 ### Diagnóstico local sem emissor
 
-A integração manual com um emissor real foi reservada como melhoria futura para
-a etapa 7. Para verificar somente a infraestrutura e a rejeição de acesso anônimo,
+A integração manual com um emissor real permanece como melhoria futura. Para
+verificar somente a infraestrutura e a rejeição de acesso anônimo,
 use no `.env` os valores abaixo, junto do caminho real de `DB_PASSWORD_FILE`:
 
 ```dotenv
@@ -72,8 +68,8 @@ Com as imagens construídas e o segredo do banco preparado, siga os comandos das
 seções 8 e 9: `config --quiet`, `up --no-build --wait --wait-timeout 180` e `ps`.
 Os health checks devem retornar 200; consultas sem token devem retornar 401.
 Os fluxos autenticados continuam sendo verificados por `./mvnw verify`.
-As instruções posteriores que pedem emissor e token reais referem-se à futura
-execução manual autenticada.
+As instruções posteriores que pedem emissor e token reais referem-se à execução
+manual autenticada pelo Compose, independente da demonstração de teste.
 
 ## 3. Conferir as ferramentas
 
@@ -84,9 +80,8 @@ docker compose version
 
 O primeiro comando deve mostrar cliente e servidor Docker. Se aparecer apenas
 o cliente acompanhado de erro, o daemon está indisponível ou o terminal não tem
-acesso ao socket. No ambiente gerenciado do Codex, a execução pelo agente pode
-precisar da permissão de acesso ao Docker fornecida pela plataforma. Não altere
-as permissões do socket para torná-lo público.
+acesso ao socket. Verifique se o serviço Docker está ativo e se o usuário possui
+as permissões necessárias para acessá-lo. Não torne o socket público.
 
 Use Docker com suporte a BuildKit e Compose v2 com `--wait` e `--wait-timeout`.
 Para construir e iniciar pelo Compose, Java e Maven não precisam estar instalados
@@ -122,9 +117,8 @@ O comando também gera o JAR da aplicação e a extensão separada do mock em
 gerados não devem ser commitados.
 
 No IntelliJ, configure o Project SDK e o JDK do Maven como Java 21. No terminal,
-use `JAVA_HOME` e `PATH` da instalação de JDK da sua máquina. Caminhos de ferramentas
-de uma sessão da nuvem não são requisitos do projeto. Proxy e certificados são
-configurações do ambiente; veja o apêndice quando necessário.
+use `JAVA_HOME` e `PATH` da instalação de JDK da sua máquina. Proxy e certificados
+são configurações do ambiente; veja o apêndice quando necessário.
 
 ## 5. Entender os três serviços
 
@@ -410,12 +404,14 @@ apenas durante o build. O trust store temporário fica em memória e não é cop
 para as imagens finais. Os mesmos passos de compilação funcionam sem esses
 segredos em uma rede normal.
 
-No Codex gerenciado, o Docker fornece o proxy de rede aos builds. O Java/Maven
-também precisa confiar na CA e conhecer o proxy. O agente preparou e validou
-as imagens usando os comandos abaixo. O arquivo temporário de settings deve
-configurar o proxy fornecido pela plataforma e o repositório local padrão do
-Maven dentro do container; não reutilize um settings com caminho local de outra
-máquina. Com Python 3 disponível, é possível gerá-lo sem imprimir credenciais:
+Em uma rede que exige proxy, configure esse acesso para o Docker e o Maven.
+O Java também precisa confiar na CA utilizada pela rede. Defina `BUILD_CA_FILE`
+com o caminho absoluto do certificado público da CA, fora do repositório.
+Os comandos abaixo obtêm o proxy da configuração do Docker ou de `HTTPS_PROXY`.
+
+O arquivo temporário de settings usa o repositório local padrão do Maven dentro
+do container; não reutilize um settings com caminho local de outra máquina.
+Com Python 3 disponível, é possível gerá-lo sem imprimir credenciais:
 
 ```bash
 build_settings_dir=$(mktemp -d)
@@ -435,7 +431,7 @@ proxy = urlparse(defaults.get('httpsProxy') or defaults.get('httpProxy')
                  or os.environ['HTTPS_PROXY'])
 root = Element('settings')
 node = SubElement(SubElement(root, 'proxies'), 'proxy')
-fields = {'id': 'cloud', 'active': 'true', 'protocol': 'http',
+fields = {'id': 'build-proxy', 'active': 'true', 'protocol': 'http',
           'host': proxy.hostname, 'port': str(proxy.port or 80),
           'nonProxyHosts': 'localhost|127.0.0.1'}
 if proxy.username is not None:
@@ -449,10 +445,10 @@ descriptor = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
 with os.fdopen(descriptor, 'wb') as output:
     ElementTree(root).write(output, encoding='utf-8', xml_declaration=True)
 PY
-docker build --secret "id=proxy_ca,src=$CODEX_PROXY_CERT" \
+docker build --secret "id=proxy_ca,src=${BUILD_CA_FILE:?Defina o caminho do certificado publico da CA}" \
   --secret "id=maven_settings,src=$DEROYQUE_BUILD_SETTINGS" \
   --target application -t deroyque-app:local .
-docker build --secret "id=proxy_ca,src=$CODEX_PROXY_CERT" \
+docker build --secret "id=proxy_ca,src=${BUILD_CA_FILE:?Defina o caminho do certificado publico da CA}" \
   --secret "id=maven_settings,src=$DEROYQUE_BUILD_SETTINGS" \
   --target provider-mock -t deroyque-provider-mock:local .
 rm -f "$DEROYQUE_BUILD_SETTINGS"
@@ -468,5 +464,5 @@ segredos. Nunca use `--insecure` ou desative a validação de certificados.
 
 Se o emissor real exigir acesso HTTPS através de proxy com CA própria também
 em runtime, será preciso montar um trust store externo somente leitura e
-configurar o cliente Java para esse ambiente. A CA da sessão não é incorporada
+configurar o cliente Java para esse ambiente. A CA do ambiente não é incorporada
 automaticamente à imagem distribuída. Isso depende do emissor e da rede reais.

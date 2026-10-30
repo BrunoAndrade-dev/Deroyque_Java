@@ -35,7 +35,7 @@ public class CorrelationIdFilter extends OncePerRequestFilter {
      * @param request requisição HTTP recebida pelo filtro de segurança.
      * @param response resposta HTTP que receberá o resultado.
      * @param chain cadeia de filtros HTTP.
-     * @throws ServletException se a configuração ou execução do cenário falhar.
+     * @throws ServletException se a cadeia de filtros falhar ao processar a requisição.
      * @throws IOException se não for possível ler ou escrever a resposta HTTP.
      */
     @Override

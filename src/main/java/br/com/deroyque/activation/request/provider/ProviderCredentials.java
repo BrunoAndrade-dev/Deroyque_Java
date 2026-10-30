@@ -60,7 +60,7 @@ public class ProviderCredentials {
             }
             return Optional.of(token);
         } catch (IOException | SecurityException exception) {
-            // Never attach file content, headers or the underlying exception to this failure.
+            // Não anexa conteúdo do arquivo, headers nem a exceção original a esta falha.
             throw new ProviderCredentialUnavailableException();
         }
     }

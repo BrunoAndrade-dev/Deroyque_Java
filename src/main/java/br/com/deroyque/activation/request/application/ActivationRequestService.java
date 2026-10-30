@@ -66,7 +66,7 @@ public class ActivationRequestService {
             if (!isExternalIdConflict(exception)) {
                 throw exception;
             }
-            // The insert transaction has already rolled back before this read.
+            // A transação de inserção já sofreu rollback antes desta consulta.
             var winner = repository.findByExternalId(externalId).orElseThrow(() -> exception);
             return resolveRetry(winner, customerId, productCode, ownerId);
         }

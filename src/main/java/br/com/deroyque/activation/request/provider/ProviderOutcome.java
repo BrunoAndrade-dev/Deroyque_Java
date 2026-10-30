@@ -35,7 +35,7 @@ public record ProviderOutcome(Kind kind, String errorCode, Instant retryAfter) {
     /**
      * Representa falha que não deve originar retry automático.
      *
-     * @param errorCode código sanitizado da falha, ou null em caso de sucesso.
+     * @param errorCode código sanitizado da falha.
      * @return resultado permanente com código de erro.
      */
     public static ProviderOutcome permanent(String errorCode) {
@@ -45,7 +45,7 @@ public record ProviderOutcome(Kind kind, String errorCode, Instant retryAfter) {
     /**
      * Representa falha temporária ou ambígua sujeita ao orçamento de tentativas.
      *
-     * @param errorCode código sanitizado da falha, ou null em caso de sucesso.
+     * @param errorCode código sanitizado da falha.
      * @param retryAfter instante mínimo solicitado pelo provedor, ou null quando ausente/inválido.
      * @return resultado temporário com prazo opcional do provedor.
      */
