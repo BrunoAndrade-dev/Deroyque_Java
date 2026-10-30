@@ -11,6 +11,21 @@ isolamento, banco PostgreSQL, migrações e processamento assíncrono. Somente o
 endereços e credenciais desta execução apontam para recursos efêmeros de teste.
 Não existe bypass de autenticação nem endpoint de token dentro da API.
 
+## Antes de começar: obter o projeto
+
+Este guia pressupõe que você já tenha o repositório na máquina em que executará
+a demonstração. Se ainda não tiver, instale o Git e execute no terminal:
+
+```bash
+git clone --branch main https://github.com/BrunoAndrade-dev/Deroyque_Java.git
+cd Deroyque_Java
+```
+
+Se já clonou o projeto seguindo o README, use a pasta existente; não faça outro
+clone dentro dela. Os comandos Maven deste guia devem ser executados na raiz
+`Deroyque_Java`, onde estão `pom.xml` e `mvnw`. Para usar o IntelliJ, abra essa
+pasta como projeto Maven.
+
 ## 1. Preparar o IntelliJ
 
 Abra o projeto Maven e use JDK 21 no Project SDK, no Maven e na configuração de

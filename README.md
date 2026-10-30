@@ -50,7 +50,7 @@ serviços, na origem dos tokens e na persistência dos dados.
 
 | Aspecto | 1. Demonstração autenticada | 2. Aplicação com serviços configurados |
 | --- | --- | --- |
-| Objetivo | Experimentar o fluxo completo pelo Swagger sem contratar/configurar um emissor | Executar a aplicação com configurações próprias de banco, integração e autenticação |
+| Objetivo | Experimentar o fluxo completo pelo Swagger sem configurar um emissor externo | Executar a aplicação com configurações próprias de banco, integração e autenticação |
 | Como iniciar | Launcher de teste pelo Maven ou IntelliJ | Docker Compose, Maven ou JAR da aplicação |
 | Banco | PostgreSQL temporário criado por Testcontainers | PostgreSQL persistente; o Compose fornece um banco em volume |
 | Ativação | WireMock temporário iniciado automaticamente | O Compose fornece WireMock; execução com provedor real exige configurar a integração |
@@ -76,7 +76,7 @@ com responsabilidades diferentes; o WireMock de ativação não emite JWTs.
 Para um clone novo:
 
 ```bash
-git clone --branch develop https://github.com/BrunoAndrade-dev/Deroyque_Java.git
+git clone --branch main https://github.com/BrunoAndrade-dev/Deroyque_Java.git
 cd Deroyque_Java
 ```
 
@@ -256,27 +256,23 @@ ativação. Para isso, faça uma chamada autenticada e consulte a solicitação.
 
 ## Tecnologias e documentação da API
 
-- Swagger UI/OpenAPI com springdoc 2.8.17 para documentar os endpoints. No Compose
-  local, abra `http://localhost:8080/swagger-ui.html`; o JSON fica em `/v3/api-docs`.
-  Use **Try it out → Execute** para enviar uma chamada. **Authorize** aceita um JWT
-  válido sem o prefixo `Bearer`; a autorização não é persistida entre recarregamentos.
-  A página não emite tokens nem libera operações protegidas. Sem emissor real,
-  o diagnóstico do Compose permite explorar a documentação e observar respostas
-  401; a demonstração separada em `src/test` permite testar chamadas autenticadas.
-  Fora do Compose, a documentação vem desativada: habilite com `SWAGGER_ENABLED=true`.
-  O Compose local habilita por padrão; `SWAGGER_ENABLED=false` desativa. Em produção,
-  mantenha desativada ou restrinja seu acesso na infraestrutura. Use navegador
-  confiável e HTTPS fora de localhost; encerre a autorização ao terminar.
+As versões fixadas são Spring Boot 3.5.16, Maven 3.9.11, springdoc 2.8.17 e
+WireMock 3.13.1, com Java 21 e PostgreSQL 17.6 nos ambientes locais fornecidos.
+Spring MVC e Bean Validation atendem à camada HTTP; Spring Data JPA/Hibernate e
+Flyway atendem à persistência; Spring Security protege a API e Actuator expõe sua
+saúde. JUnit 5, Mockito e AssertJ são fornecidos pelo starter de testes.
 
-- Java 21, Spring Boot 3.5.16 e Maven 3.9.11 fixados no projeto.
-- Spring MVC para HTTP, Bean Validation para validação dos DTOs e
-  Actuator para saúde da aplicação.
-- JUnit 5 e AssertJ disponibilizados pelo starter de testes do Spring Boot.
-- Spring Data JPA/Hibernate para persistência, PostgreSQL e Flyway. O schema é
-  definido pelas migrações em `src/main/resources/db/migration`; Hibernate usa
-  `ddl-auto=validate`, sem criar ou alterar tabelas automaticamente.
-- Entidade e repositório organizados por funcionalidade em `request/domain` e
-  `request/persistence`. A entidade não é usada diretamente como DTO da API.
+A documentação usa Swagger UI/OpenAPI. A interface fica em `/swagger-ui.html`
+e o contrato JSON em `/v3/api-docs`, na porta da execução escolhida. Use
+**Try it out → Execute** para enviar chamadas. A autenticação segue os passos
+da respectiva [forma de execução](#escolha-como-executar).
+
+O Compose local habilita a documentação por padrão; `SWAGGER_ENABLED=false`
+a desativa. Na execução direta, o padrão é desativado e
+`SWAGGER_ENABLED=true` a habilita. A demonstração de teste a habilita
+automaticamente. Em produção, mantenha desativada ou restrinja seu acesso na
+infraestrutura. A autorização não é persistida entre recarregamentos; use um
+navegador confiável, HTTPS fora de localhost e encerre a autorização ao terminar.
 
 ## Domínio e persistência
 
@@ -312,10 +308,20 @@ ativação. Para isso, faça uma chamada autenticada e consulte a solicitação.
 Os endpoints de negócio exigem um access token JWT no header `Authorization`.
 Os exemplos abaixo usam Bash e uma função que entrega o header ao curl pela
 entrada padrão, evitando colocar o valor do token nos argumentos do processo.
-Obtenha o token do seu emissor externo pelo fluxo `client_credentials` e informe
-somente o token quando solicitado, sem o prefixo `Bearer`:
+Antes das chamadas, escolha a URL e obtenha um token da mesma execução:
+
+- **Opção 1:** use `http://127.0.0.1:8090` e gere o token na página local do helper.
+- **Opção 2:** use `http://127.0.0.1:8080` (ou a porta configurada) e obtenha o token
+  no emissor externo pelo fluxo `client_credentials`. O diagnóstico com `.invalid`
+  não permite executar estes exemplos com sucesso.
+
+Para executar todos os exemplos com o mesmo token, ele precisa de
+`requests:write` e `requests:read`. No Bash, defina a URL conforme sua opção
+(o exemplo abaixo usa a demonstração) e digite somente o token no prompt oculto,
+sem o prefixo `Bearer`:
 
 ```bash
+API_BASE_URL=http://127.0.0.1:8090
 read -r -s -p 'Access token: ' ACCESS_TOKEN
 printf '\n'
 api_curl() {
@@ -335,7 +341,7 @@ desenvolvimento controlado.
 ### Criar uma solicitação
 
 ```bash
-api_curl -i -X POST http://localhost:8080/api/v1/requests \
+api_curl -i -X POST "$API_BASE_URL/api/v1/requests" \
   -H 'Content-Type: application/json' \
   -d '{"externalId":"EXT-12345","customerId":"CUST-10001","productCode":"INTERNET-500"}'
 ```
@@ -354,8 +360,9 @@ Uma criação nova responde `201 Created`, com `Location: /api/v1/requests/{id}`
 }
 ```
 
-O UUID e as datas acima são ilustrativos. DTOs de entrada e saída são separados
-da entidade; a versão interna do registro não é exposta na resposta.
+O UUID e as datas acima são ilustrativos. Nas consultas seguintes, substitua o
+UUID pelo `id` retornado no seu POST. A resposta não expõe versão JPA, proprietário
+interno ou metadados de processamento.
 
 | Situação | Resposta |
 | --- | --- |
@@ -372,7 +379,7 @@ criação e respostas de retry com o mesmo UUID, sem registros adicionais.
 ### Consultar pelo UUID
 
 ```bash
-api_curl -i http://localhost:8080/api/v1/requests/0b7f3c1e-5d2a-4c4e-9a51-2f8d7b1e6c90
+api_curl -i "$API_BASE_URL/api/v1/requests/0b7f3c1e-5d2a-4c4e-9a51-2f8d7b1e6c90"
 ```
 
 Retorna `200 OK` com a representação atual, `404 Not Found` para UUID inexistente
@@ -381,7 +388,7 @@ ou pertencente a outro consumidor, ou `400 Bad Request` para formato inválido.
 ### Listar e filtrar
 
 ```bash
-api_curl -i 'http://localhost:8080/api/v1/requests?status=PENDING&customerId=CUST-10001&page=0&size=20'
+api_curl -i "$API_BASE_URL/api/v1/requests?status=PENDING&customerId=CUST-10001&page=0&size=20"
 ```
 
 - `status` e `customerId` são filtros opcionais, aplicados em conjunto quando
@@ -400,7 +407,7 @@ api_curl -i 'http://localhost:8080/api/v1/requests?status=PENDING&customerId=CUS
 Ao terminar as chamadas, remova a variável e a função do shell:
 
 ```bash
-unset ACCESS_TOKEN
+unset ACCESS_TOKEN API_BASE_URL
 unset -f api_curl
 ```
 
@@ -522,8 +529,8 @@ rotacione a credencial e trate também o histórico e os registros afetados.
 Logs de proxy, infraestrutura e ferramentas externas também devem ocultar
 `Authorization`; as verificações da aplicação não substituem essa configuração.
 
-Limitação de taxa e limites adicionais de payload são possíveis evoluções de
-segurança; não são garantias implementadas nesta etapa.
+Os limites de proteção contra abuso ainda pendentes estão descritos em
+[Pontos pendentes e limitações conhecidas](#pontos-pendentes-e-limitações-conhecidas).
 
 ## Processamento assíncrono e integração
 
@@ -629,7 +636,9 @@ O build também gera `target/deroyque-test-0.0.1-SNAPSHOT-provider-mock.jar`, um
 extensão exclusiva do mock, separada do JAR da aplicação. A dependência WireMock
 tem escopo de teste e não é incorporada à aplicação de produção.
 
-Depois de `./mvnw verify`, em Linux/macOS, execute o mock em outro terminal:
+O Compose e a demonstração já iniciam seus mocks automaticamente. Somente para
+a execução direta pelo Maven/JAR, depois de `./mvnw verify`, inicie o mock
+separadamente em outro terminal (Linux/macOS):
 
 ```bash
 java -cp "$HOME/.m2/repository/org/wiremock/wiremock-standalone/3.13.1/wiremock-standalone-3.13.1.jar:target/deroyque-test-0.0.1-SNAPSHOT-provider-mock.jar" \
@@ -658,6 +667,11 @@ prazo de retries e reconciliação. As regras especiais de produto pertencem ape
 ao mock; o serviço de ativação não interpreta esses códigos especiais.
 
 ## Estratégia de testes
+
+Swagger permite explorar a API manualmente. WireMock simula o provedor; os testes
+automatizados verificam as respostas e os efeitos. Testamos erro `500` e timeout
+separadamente, pois receber uma resposta de erro é diferente de não obter uma
+resposta dentro do prazo.
 
 - **Unitários:** criação, normalização e limites dos identificadores, estados
   inválidos e preservação das datas, sem iniciar Spring ou banco.
@@ -694,9 +708,13 @@ ao mock; o serviço de ativação não interpreta esses códigos especiais.
   registros legados sem dono e disputa simultânea por um `externalId` global.
 - **Credencial do provedor:** leitura limitada, rejeição de arquivo inválido ou
   ausente, proteção contra injeção de headers, HTTPS e rotação entre chamadas.
-- Os testes anteriores controlam o processador explicitamente, desabilitando
-  somente o agendamento automático para manter as verificações determinísticas.
-  A rotina automática é executada no teste específico de agendamento.
+- **Demonstração:** testes do helper verificam a proteção de origem e as chaves
+  públicas; o fluxo completo exercita processamento automático, retries, permissões
+  e isolamento com os mesmos componentes de produção.
+- Por padrão, os testes desabilitam somente o agendamento automático para manter
+  verificações determinísticas e controlam explicitamente o processamento quando
+  necessário. O teste de agendamento e a demonstração o habilitam para verificar
+  o fluxo em segundo plano.
 - Nenhum teste é desabilitado automaticamente quando Docker está indisponível;
   essa condição é uma falha de infraestrutura a corrigir.
 
@@ -706,11 +724,6 @@ Estão implementados liveness, readiness com verificação do banco, logs com
 identificador de correlação e propagação desse identificador até o provedor.
 Os resultados da integração são registrados de forma sanitizada. O identificador
 ajuda a relacionar os logs; ele não constitui, sozinho, um tracing distribuído.
-
-Swagger permite explorar os endpoints manualmente. WireMock simula o provedor;
-os testes automatizados fazem as verificações repetíveis sobre os resultados.
-Um teste de `500` não substitui um teste de timeout: no primeiro há uma resposta
-de erro, enquanto no segundo o resultado remoto pode ser desconhecido.
 
 Como evolução, priorizaria alertas para aumento persistente de erros/timeouts,
 crescimento da fila e idade excessiva dos pedidos pendentes. Definiria limites e

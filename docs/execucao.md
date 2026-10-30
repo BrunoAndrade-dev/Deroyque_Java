@@ -22,7 +22,7 @@ local exige encaminhamento privado de portas ou uma configuração de rede adequ
 Para obter o projeto:
 
 ```bash
-git clone --branch develop https://github.com/BrunoAndrade-dev/Deroyque_Java.git
+git clone --branch main https://github.com/BrunoAndrade-dev/Deroyque_Java.git
 cd Deroyque_Java
 ```
 
@@ -34,7 +34,7 @@ git status --short --branch
 ```
 
 `pwd` mostra a pasta atual. `git status` permite conferir a branch e as alterações
-locais. Os exemplos usam a branch `develop`. Não clone novamente dentro de um
+locais. Os exemplos usam a branch `main`. Não clone novamente dentro de um
 checkout existente.
 
 ## 2. O que já pode ser executado sem um emissor OAuth real
