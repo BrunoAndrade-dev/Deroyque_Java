@@ -30,7 +30,8 @@ propostas estão identificadas ao final deste documento.
 
 ## Guia de leitura
 
-- [Execução a partir de um clone limpo](#executar-e-testar).
+- [Comparação das duas formas de execução](#escolha-como-executar).
+- [Clone e testes automatizados](#executar-e-testar).
 - [Demonstração autenticada pelo Swagger](docs/demo-swagger.md).
 - [Tutorial detalhado com Docker Compose](docs/execucao.md).
 - [Contrato da API](#api) e [segurança](#segurança).
@@ -41,129 +42,217 @@ propostas estão identificadas ao final deste documento.
 - [Limitações](#pontos-pendentes-e-limitações-conhecidas) e
   [prioridades de evolução](#melhorias-futuras-e-prioridades).
 
-## Tutorial de execução com Docker
+## Escolha como executar
 
-Para criar e consultar pedidos manualmente pelo Swagger sem um emissor real,
-use a [demonstração autenticada de teste](docs/demo-swagger.md). Ela inicia recursos
-temporários independentes, mantém a segurança e não altera o `.env` ou o Compose.
-O emissor e o launcher ficam exclusivamente em `src/test`, fora do JAR de produção.
+Há **duas formas de executar a aplicação**. Ambas utilizam PostgreSQL real e
+as mesmas regras de negócio e segurança. A diferença está na preparação dos
+serviços, na origem dos tokens e na persistência dos dados.
 
-Consulte o [tutorial detalhado de execução](docs/execucao.md). Ele explica o uso
-do terminal, pré-requisitos, testes, configuração, inicialização,
-consultas, logs, persistência, reinício e solução de problemas.
+| Aspecto | 1. Demonstração autenticada | 2. Aplicação com serviços configurados |
+| --- | --- | --- |
+| Objetivo | Experimentar o fluxo completo pelo Swagger sem contratar/configurar um emissor | Executar a aplicação com configurações próprias de banco, integração e autenticação |
+| Como iniciar | Launcher de teste pelo Maven ou IntelliJ | Docker Compose, Maven ou JAR da aplicação |
+| Banco | PostgreSQL temporário criado por Testcontainers | PostgreSQL persistente; o Compose fornece um banco em volume |
+| Ativação | WireMock temporário iniciado automaticamente | O Compose fornece WireMock; execução com provedor real exige configurar a integração |
+| Tokens | Helper local com chaves e JWTs temporários, exclusivo de `src/test` | Emissor OAuth 2.0 externo configurado e tokens válidos obtidos pelo consumidor |
+| `.env` | Não é necessário | Usado pelo Compose; execução direta usa variáveis do processo |
+| Porta padrão da API | `8090` | `8080` |
+| Dados ao encerrar | Banco temporário removido | Dados do Compose preservados no volume |
+| Tutorial | [Demonstração pelo Swagger](docs/demo-swagger.md) | [Execução com Docker Compose](docs/execucao.md) |
 
-**Ainda não foi configurado um emissor OAuth 2.0 real.** Os testes funcionam com
-um emissor efêmero exclusivo dos testes. A execução manual autenticada pelo Compose
-exige configurar um emissor externo; o Compose não cria um servidor de autenticação
-nem desabilita a segurança.
+**Para ver a API funcionando agora, escolha a opção 1.** Ainda não foi configurado
+um emissor OAuth real no projeto. A opção 2 permite validar a infraestrutura sem
+emissor, usando o diagnóstico explicado abaixo, mas nesse caso as operações de
+negócio continuam protegidas e não podem ser executadas com sucesso.
 
-Com os metadados públicos do emissor e o arquivo externo de senha configurados
-conforme o tutorial:
-
-```bash
-docker compose up -d --build --wait --wait-timeout 180
-```
-
-O Compose inicia aplicação, PostgreSQL e WireMock. Apenas a API é publicada,
-em `127.0.0.1:8080`. Banco e mock são acessados pela rede interna do Compose.
-O build usa Maven 3.9.11/JDK 21; a imagem final usa apenas JRE 21, usuário
-`10001:10001` e o JAR necessário para cada serviço. O build das imagens compila
-os testes para gerar a extensão do mock, mas não os executa: use `./mvnw verify`
-separadamente. O banco usa volume persistente; aplicação e mock têm sistema de
-arquivos somente leitura e `/tmp` temporário. O desligamento da aplicação é
-gracioso, com prazo de 20 segundos por fase do Spring e 45 segundos no Compose.
-
-## Pré-requisitos
-
-- JDK 21 (`java` e `javac` disponíveis).
-- Acesso ao Maven Central na primeira execução, para obter Maven e dependências.
-- Não é necessário instalar Maven: use o Wrapper incluído no repositório.
-- Docker em execução e acessível para os testes com Testcontainers. Os testes
-  criam um PostgreSQL 17.6 temporário, sem exigir um banco instalado ou
-  credenciais configuradas manualmente. A primeira execução baixa as imagens.
-- Para executar a aplicação fora dos testes: PostgreSQL disponível e as
-  variáveis de conexão configuradas conforme a seção abaixo.
-- Para chamadas autenticadas fora dos testes: um provedor OAuth 2.0 externo,
-  com JWTs RS256, issuer, JWK Set público e audiência configurados. Não existe
-  servidor de autenticação nem emissor de tokens na aplicação.
+O **provedor de ativação** recebe os pedidos de ativação. O **emissor OAuth**
+fornece os tokens usados pelos consumidores para acessar nossa API. São serviços
+com responsabilidades diferentes; o WireMock de ativação não emite JWTs.
 
 ## Executar e testar
 
-Com Git, JDK 21 e Docker disponíveis, partindo de um diretório sem o projeto:
+### Preparar o projeto e executar os testes automatizados
+
+Para um clone novo:
 
 ```bash
 git clone --branch develop https://github.com/BrunoAndrade-dev/Deroyque_Java.git
 cd Deroyque_Java
+```
+
+Se já tiver o checkout, abra sua pasta existente. Para testes e demonstração,
+confira Git, JDK 21 completo (`java` e `javac`) e Docker em execução e acessível.
+Não é necessário instalar Maven: o Wrapper incluído baixa a versão fixada.
+A primeira execução precisa de acesso ao Maven Central e ao registro das imagens.
+
+Na raiz do projeto, execute todos os testes com:
+
+```bash
 ./mvnw verify
 ```
 
-Se já tiver o checkout, execute apenas `./mvnw verify` na raiz. Esse comando
-compila, executa os testes e gera os artefatos. Não exige `.env`, banco instalado
-ou emissor OAuth real: os testes preparam seus recursos temporários.
+O comando compila, testa e gera os artefatos. Espere `BUILD SUCCESS`, sem falhas.
+Não exige `.env`, banco instalado ou emissor real: os testes preparam PostgreSQL,
+WireMock e chaves temporárias. Os testes são uma verificação automática e não
+mantêm uma aplicação disponível para navegação depois de terminarem.
 
-Para experimentar a API manualmente sem emissor real, inicie a demonstração:
+Os exemplos usam Bash. No Windows, utilize `mvnw.cmd` e consulte os comandos
+PowerShell no guia da demonstração.
 
-```bash
-./mvnw test-compile spring-boot:test-run \
-  -Dspring-boot.run.main-class=br.com.deroyque.activation.demo.SwaggerDemoApplication
+### Opção 1 — Demonstração autenticada pelo Swagger
+
+Use esta opção para criar, consultar e acompanhar pedidos, testar duplicidade,
+erros do provedor, permissões e isolamento entre consumidores.
+
+**Preparação:** JDK 21 e Docker funcionando. Não precisa criar `.env`, preparar
+senha de banco, iniciar o Compose ou configurar um emissor externo.
+
+1. Na raiz do projeto, inicie:
+
+   ```bash
+   ./mvnw test-compile spring-boot:test-run \
+     -Dspring-boot.run.main-class=br.com.deroyque.activation.demo.SwaggerDemoApplication
+   ```
+
+2. Mantenha esse terminal aberto. O launcher inicia um PostgreSQL real temporário,
+   um WireMock de ativação e um emissor local de teste. Abra o Swagger em
+   `http://127.0.0.1:8090/swagger-ui.html` e a página de tokens na URL com porta
+   aleatória exibida no console.
+3. Na página de tokens, escolha **Consumidor A — leitura e escrita**, clique em
+   **Gerar token** e **Copiar token**. No Swagger, use **Authorize** e cole apenas
+   o token, sem o prefixo `Bearer`. Os tokens duram cinco minutos; gere outro
+   quando necessário.
+4. Execute os endpoints. Um POST válido retorna `201` e `PENDING`; consulte o
+   UUID retornado para acompanhar a ativação. O guia abaixo apresenta os cenários
+   de sucesso, falha, timeout, duplicidade e permissões.
+5. Encerre com `Ctrl+C`. Os recursos temporários são encerrados e os pedidos
+   dessa execução são descartados. Uma nova execução começa com banco e chaves novos.
+
+Leia o [passo a passo da demonstração](docs/demo-swagger.md), incluindo a execução
+pelo IntelliJ. O launcher e o emissor ficam somente em `src/test`, fora do JAR de
+produção. A aplicação mantém validação de JWT, escopos e propriedade dos pedidos.
+O token dessa demonstração destina-se à API da porta **8090**; não o use no Compose
+na porta 8080, que possui outra configuração de confiança.
+
+### Opção 2 — Aplicação com serviços configurados
+
+Use esta opção para manter os pedidos entre execuções e fornecer as configurações
+do ambiente. As chamadas autenticadas dependem de um emissor OAuth externo com
+JWTs RS256, JWK Set acessível, audiência e escopos adequados. A aplicação de
+produção valida tokens; não possui endpoint de login, emissão ou renovação.
+
+#### Pelo Docker Compose
+
+O Compose incluído inicia três serviços: aplicação, PostgreSQL persistente e
+WireMock de ativação. Ele **não inicia um emissor OAuth**. Para construir e iniciar
+os contêineres, basta Docker com BuildKit e Compose v2; JDK e Maven são fornecidos
+pelo estágio de build. Para executar `./mvnw verify` no host, JDK 21 continua necessário.
+
+Siga o [tutorial de execução](docs/execucao.md) nesta ordem:
+
+1. Execute os testes, conforme a seção 4 do tutorial.
+2. Prepare uma única vez o arquivo externo de senha do banco, conforme a seção 6.
+   Se o volume já foi inicializado, mantenha a senha existente.
+3. Copie `.env.example` para `.env` sem sobrescrever configurações existentes e
+   preencha o caminho absoluto em `DB_PASSWORD_FILE`. A senha fica no arquivo
+   externo; não escreva seu valor no `.env`.
+4. Para chamadas autenticadas, preencha `SECURITY_ISSUER_URI`,
+   `SECURITY_JWK_SET_URI` e `SECURITY_AUDIENCE` com metadados do seu emissor real,
+   conforme a seção 7. Obtenha o token válido nesse emissor.
+5. Valide e inicie:
+
+   ```bash
+   docker compose config --quiet
+   docker compose up -d --build --wait --wait-timeout 180
+   docker compose ps
+   ```
+
+Abra `http://127.0.0.1:8080/swagger-ui.html`. Use um token aceito pelo emissor
+configurado para chamar os endpoints de negócio. O banco e o mock ficam na rede
+interna do Compose; somente a API é publicada no loopback, por padrão na porta 8080.
+
+**Sem emissor real: diagnóstico limitado da mesma opção 2.** Depois de preparar o
+arquivo de senha e `.env`, use estes metadados fictícios:
+
+```dotenv
+SECURITY_ISSUER_URI=https://issuer.invalid
+SECURITY_JWK_SET_URI=https://issuer.invalid/jwks
+SECURITY_AUDIENCE=deroyque-local-diagnostic
 ```
 
-Abra o Swagger em `http://127.0.0.1:8090/swagger-ui.html` e a página de tokens na
-URL local exibida no console. Gere um token na página e informe-o em **Authorize**,
-sem o prefixo `Bearer`. O [guia da demonstração](docs/demo-swagger.md) detalha os
-cenários e a execução pelo IntelliJ. `Ctrl+C` encerra os recursos temporários;
-os pedidos dessa demonstração não persistem entre execuções.
+Mantenha também `DB_PASSWORD_FILE` com o caminho absoluto do arquivo existente,
+`APP_PORT=8080` e `SWAGGER_ENABLED=true`. Inicie com os mesmos comandos de Compose.
+Os health checks devem retornar `200`; chamadas de negócio sem token devem
+retornar `401`. É possível abrir a documentação Swagger, mas **não criar nem
+consultar pedidos autenticados**. O domínio `.invalid` não emite tokens nem fornece
+chaves. Para experimentar o fluxo completo sem emissor real, volte à **opção 1**.
+Esse diagnóstico não altera a segurança e não deve ser usado em produção.
 
-No Windows, utilize `mvnw.cmd` no lugar de `./mvnw`.
+Ao encerrar normalmente, use `docker compose stop` ou `docker compose down`, sem
+`--volumes`, para preservar os pedidos. A persistência do banco não se aplica ao
+histórico de idempotência do mock, que fica em memória. O tutorial explica reinício,
+reconstrução das imagens, logs e solução de problemas.
 
-Para iniciar a aplicação, disponibilize um banco PostgreSQL vazio e configure
-as variáveis no ambiente do processo:
+O build usa Maven 3.9.11/JDK 21; a imagem final usa JRE 21 e usuário
+`10001:10001`. Ele compila os testes para gerar a extensão separada do mock, mas
+não os executa: use `./mvnw verify` separadamente. Aplicação e mock usam sistema
+de arquivos somente leitura e `/tmp` temporário. O desligamento é gracioso, com
+prazo de 20 segundos por fase do Spring e 45 segundos no Compose.
+
+#### Diretamente pelo Maven ou JAR
+
+Esta é outra forma de iniciar a **opção 2**, usando serviços que você disponibiliza.
+Configure PostgreSQL, o provedor de ativação e o emissor antes de iniciar.
+Para o provedor simulado, a seção [Mock WireMock](#mock-wiremock) explica como
+iniciá-lo separadamente. Para uma integração real, configure sua URL HTTPS e
+credencial e valide o contrato de idempotência.
+
+Forneça as variáveis no ambiente do processo ou na configuração de execução do
+IntelliJ. **Maven e `java -jar` não carregam o `.env` do Compose automaticamente.**
 
 | Variável | Conteúdo |
 | --- | --- |
 | `DB_URL` | URL JDBC; padrão `jdbc:postgresql://localhost:5432/deroyque` |
 | `DB_USERNAME` | Usuário do banco |
-| `DB_PASSWORD` | Senha do banco |
-| `PROVIDER_BASE_URL` | Endereço do WireMock/provedor; padrão `http://localhost:8081` |
+| `DB_PASSWORD` | Senha do banco; forneça por mecanismo seguro, sem versionar |
+| `PROVIDER_BASE_URL` | Endereço do provedor; padrão `http://localhost:8081` para o mock |
 | `SECURITY_ISSUER_URI` | Emissor confiável dos JWTs; obrigatório |
 | `SECURITY_JWK_SET_URI` | Endereço confiável das chaves públicas; obrigatório |
 | `SECURITY_AUDIENCE` | Audiência esperada para esta API; obrigatória |
 | `PROVIDER_TOKEN_FILE` | Caminho externo do arquivo de credencial do provedor; opcional para o mock |
+| `SWAGGER_ENABLED` | `true` para habilitar a documentação local; padrão `false` fora do Compose |
 
-Forneça as credenciais pelo ambiente ou gerenciador de segredos, sem gravá-las
-em arquivos versionados. O usuário precisa de permissão para aplicar as
-migrações neste ambiente de desenvolvimento. Configure os três parâmetros de
-segurança com os metadados públicos do seu emissor real. Sem esses valores, a
-aplicação falha na inicialização; não existe fallback que libere a API.
-Os testes configuram automaticamente um JWK Set local e chaves efêmeras, sem
-precisar de credenciais reais. Com banco, mock e segurança configurados:
+O usuário do banco precisa das permissões de migração neste ambiente de
+desenvolvimento. Sem os parâmetros obrigatórios de segurança, a aplicação falha
+na inicialização. Com os serviços e as variáveis preparados, use uma das alternativas:
 
 ```bash
 ./mvnw spring-boot:run
 ```
 
-Na inicialização, Flyway aplica as migrações e Hibernate valida o schema. A
-aplicação não inicia normalmente se a conexão ou a validação falhar.
-
-O build produz `target/deroyque-test-0.0.1-SNAPSHOT.jar`, que também pode ser
-executado com:
+Ou, depois de gerar os artefatos com `./mvnw verify`:
 
 ```bash
 java -jar target/deroyque-test-0.0.1-SNAPSHOT.jar
 ```
 
-Os testes HTTP iniciam um servidor em porta aleatória. Com a aplicação em
-execução na porta padrão 8080, é possível verificar localmente:
+Flyway aplica as migrações e Hibernate valida o schema. A aplicação não inicia
+normalmente se a conexão ou a validação falhar. Não execute duas aplicações na
+mesma porta; use apenas uma forma de inicialização por vez na porta 8080.
+
+### Verificar a saúde e acompanhar o resultado
+
+Com a opção 2 em execução na porta padrão:
 
 ```bash
-curl --fail http://localhost:8080/actuator/health/liveness
-curl --fail http://localhost:8080/actuator/health/readiness
+curl --fail http://127.0.0.1:8080/actuator/health/liveness
+curl --fail http://127.0.0.1:8080/actuator/health/readiness
 ```
 
-Ambos devem retornar HTTP 200 com `{"status":"UP"}` em condições normais.
-Liveness verifica a aplicação; readiness inclui também a conexão com o banco.
-Nenhum dos dois comprova que uma ativação específica foi concluída; esse resultado
-é acompanhado pelo endpoint da solicitação.
+Na opção 1, use a porta **8090**. Em condições normais, ambos retornam HTTP `200`
+com `{"status":"UP"}`. Liveness verifica a aplicação; readiness inclui o banco.
+Esses resultados não confirmam o funcionamento do emissor ou a conclusão de uma
+ativação. Para isso, faça uma chamada autenticada e consulte a solicitação.
 
 ## Tecnologias e documentação da API
 

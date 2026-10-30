@@ -1,4 +1,14 @@
-# Tutorial de execução — Deroyque Test
+# Tutorial de execução com Docker Compose — Deroyque Test
+
+Este guia detalha a **opção 2 do README**: aplicação, PostgreSQL persistente e
+WireMock de ativação no Compose, com configurações próprias do ambiente.
+Para chamadas autenticadas, o emissor OAuth é externo e deve ser configurado.
+Sem ele, a seção 2 permite somente um diagnóstico de infraestrutura e de rejeição
+de acesso anônimo; não permite criar pedidos pelo Swagger.
+
+**Para testar o fluxo completo sem emissor real, use a opção 1:** siga a
+[demonstração autenticada](demo-swagger.md), na porta 8090. Ela prepara banco,
+WireMock e tokens temporários automaticamente, sem `.env` ou Compose.
 
 ## 1. Onde executar os comandos
 
@@ -64,8 +74,15 @@ permite iniciar a aplicação porque ela não busca chaves no startup, mas não 
 tokens nem permite operações autenticadas. Não a use em produção nem considere
 um health UP como validação de OAuth.
 
-Com as imagens construídas e o segredo do banco preparado, siga os comandos das
-seções 8 e 9: `config --quiet`, `up --no-build --wait --wait-timeout 180` e `ps`.
+Prepare o segredo do banco conforme a seção 6. Copie `.env.example` para `.env`
+sem sobrescrever um arquivo existente e configure o caminho absoluto em
+`DB_PASSWORD_FILE`, conforme a seção 7. Para esse diagnóstico, use os metadados
+`.invalid` acima no lugar dos metadados reais; não precisa obter um token.
+Mantenha `APP_PORT=8080` e `SWAGGER_ENABLED=true`.
+
+Em seguida, construa e inicie conforme as seções 8 e 9: `config --quiet`,
+`up -d --build --wait --wait-timeout 180` e `ps`. Se as imagens já estiverem
+construídas, pode usar `--no-build` no lugar de `--build`.
 Os health checks devem retornar 200; consultas sem token devem retornar 401.
 Os fluxos autenticados continuam sendo verificados por `./mvnw verify`.
 As instruções posteriores que pedem emissor e token reais referem-se à execução
@@ -177,8 +194,10 @@ o Docker ou a máquina tem acesso privilegiado a eles.
 
 ## 7. Configurar os metadados do emissor externo
 
-Esta etapa depende de um emissor OAuth 2.0 real, ainda não configurado.
-Você precisará obter dele:
+Para chamadas autenticadas, esta etapa depende de um emissor OAuth 2.0 real,
+ainda não configurado. Se escolheu o diagnóstico limitado da seção 2, use os
+metadados `.invalid` ali indicados e prepare somente o arquivo `.env` abaixo.
+Para a execução autenticada, obtenha do emissor:
 
 - O `issuer` exato presente nos tokens.
 - A URL HTTPS do JWK Set de chaves públicas.
@@ -215,7 +234,8 @@ não aponta para ele. Use um endereço HTTPS acessível e válido para o ambient
 
 ## 8. Validar, construir e iniciar
 
-Depois de completar a configuração real:
+Depois de configurar o arquivo de senha e o `.env`, usando metadados reais
+para chamadas autenticadas ou `.invalid` somente para o diagnóstico:
 
 ```bash
 docker compose config --quiet

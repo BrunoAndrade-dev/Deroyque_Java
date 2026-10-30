@@ -1,6 +1,8 @@
 # Demonstração autenticada pelo Swagger
 
-Esta execução foi aprovada para testar manualmente a API sem um emissor real.
+Este guia detalha a **opção 1 do README**: testar o fluxo completo manualmente
+sem configurar um emissor OAuth externo. Não precisa criar `.env`, preparar senha
+de banco ou iniciar o Compose. JDK 21 e Docker em execução são necessários.
 O launcher e o emissor estão exclusivamente em `src/test`: não entram no JAR de
 produção nem no artefato do mock. O `.env` e o Compose existentes não são alterados.
 
